@@ -1,3 +1,5 @@
+// app/api/auth/[...nextauth]/route.ts
+
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -15,15 +17,15 @@ export const authOptions: NextAuthOptions = {
           prompt: "consent",
           access_type: "offline",
           response_type: "code",
-          scope: "openid email profile"
-        }
-      }
+          scope: "openid email profile",
+        },
+      },
     }),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "text", placeholder: "you@example.com" },
-        password: { label: "Password", type: "password" }
+        password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
         await connectMongo();
@@ -35,9 +37,28 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
+
+  callbacks: {
+    // On first Google sign-in, ensure a User document exists in Mongo
+    async signIn({ user, account }) {
+      if (account?.provider === "google") {
+        await connectMongo();
+        const exists = await User.findOne({ email: user.email });
+        if (!exists) {
+          await User.create({
+            name: user.name!,
+            email: user.email!,
+            googleId: account.providerAccountId,
+          });
+        }
+      }
+      return true;
+    },
+  },
+
   secret: process.env.NEXTAUTH_SECRET,
   session: {
-    strategy: "jwt"
+    strategy: "jwt",
   },
 };
 
