@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 const JourneySchema = new mongoose.Schema({
-  // userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   start: { type: String, required: true },
   destination: { type: String, required: true },
   waypoints: [{ type: String }],

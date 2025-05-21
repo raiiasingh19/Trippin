@@ -1,5 +1,7 @@
 "use client";
+
 import React from "react";
+import { signIn, signOut, useSession } from "next-auth/react";
 
 interface NavbarProps {
   savedJourneys: any[];
@@ -14,6 +16,8 @@ export default function Navbar({
   onEditSavedTrip,
   onOpenModal,
 }: NavbarProps) {
+  const { data: session, status } = useSession();
+
   return (
     <nav className="bg-black text-white flex items-center justify-between px-4 py-2">
       <div className="flex-shrink-0">
@@ -43,9 +47,22 @@ export default function Navbar({
             Plan Trip
           </button>
         )}
-        <button className="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded">
-          Sign In
-        </button>
+
+        {status === "authenticated" ? (
+          <button
+            onClick={() => signOut()}
+            className="bg-red-500 hover:bg-red-600 px-3 py-1 rounded"
+          >
+            Sign Out
+          </button>
+        ) : (
+          <button
+            onClick={() => signIn("google")}
+            className="bg-yellow-500 hover:bg-yellow-600 text-black px-3 py-1 rounded"
+          >
+            Sign In with Google
+          </button>
+        )}
       </div>
     </nav>
   );

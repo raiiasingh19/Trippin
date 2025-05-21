@@ -5,20 +5,21 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        source: '/api/auth/:path*',
         headers: [
           {
             key: 'Content-Security-Policy',
             value: [
-              "script-src 'self' https://maps.googleapis.com https://maps.gstatic.com",
-              "'unsafe-eval' 'unsafe-inline'",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: https://*.googleapis.com https://*.gstatic.com",
-              "connect-src 'self' https://*.googleapis.com https://*.gstatic.com",
-              "font-src 'self' https://fonts.gstatic.com",
-              "frame-src 'none';",
-              "object-src 'none';"
-            ].join(' ').replace(/; /g, ' '),  // Proper CSP formatting
+              "default-src 'self'",
+              "script-src 'self' https://accounts.google.com",
+              "style-src  'self' 'unsafe-inline'",
+              // <-- add https://authjs.dev here:
+              "img-src    'self' data: https://authjs.dev",
+              "connect-src 'self' https://accounts.google.com",
+              "font-src   'self'",
+              "frame-src  https://accounts.google.com",
+              "object-src 'none'",
+            ].join("; ")
           },
           {
             key: 'X-Content-Type-Options',
