@@ -1,6 +1,6 @@
 "use client";
 
-import React, { FormEvent, useRef } from "react";
+import React, { FormEvent, useRef, useEffect } from "react";
 import { Autocomplete } from "@react-google-maps/api";
 
 interface StopTimes {
@@ -70,6 +70,13 @@ export default function TripPlannerModal({
   const waypointRefs = useRef<(google.maps.places.Autocomplete | null)[]>(
     []
   );
+  const destinationInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+  if (destinationInputRef.current) {
+    destinationInputRef.current.value = destination;
+  }
+}, [destination]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
@@ -184,6 +191,7 @@ export default function TripPlannerModal({
             >
               <input
                 type="text"
+                ref={destinationInputRef} // ✅ this is new
                 placeholder="Enter destination"
                 className="w-full px-2 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-gray-700"
               />
