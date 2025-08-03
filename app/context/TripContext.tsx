@@ -39,6 +39,12 @@ interface TripContextType {
   setSavedJourneys: (val: any[]) => void;
   showTrips: boolean;
   setShowTrips: (val: boolean) => void;
+  directions: google.maps.DirectionsResult | null;
+  setDirections: (val: google.maps.DirectionsResult | null) => void;
+  directionsSegments: google.maps.DirectionsResult[];
+  setDirectionsSegments: (val: google.maps.DirectionsResult[]) => void;
+  extraMarkers: { position: google.maps.LatLngLiteral }[];
+  setExtraMarkers: (val: { position: google.maps.LatLngLiteral }[]) => void;
   addStop: () => void;
   removeStop: (i: number) => void;
   updateStop: (i: number, val: string) => void;
@@ -47,7 +53,7 @@ interface TripContextType {
   editSavedTripHandler: () => void;
   deleteTripHandler: (id: string) => void;
   saveTripHandler: () => Promise<void>;
-  getDirectionsHandler: (e: FormEvent, maps: typeof google.maps, setDirections: any, setDirectionsSegments: any, setExtraMarkers: any) => Promise<void>;
+  getDirectionsHandler: (e: FormEvent, maps: typeof google.maps, setDirections?: any, setDirectionsSegments?: any, setExtraMarkers?: any) => Promise<void>;
 }
 
 const TripContext = createContext<TripContextType | undefined>(undefined);
@@ -74,7 +80,11 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [itinerary, setItinerary] = useState<{ title: string; description: string }[]>([]);
   const [segmentInfos, setSegmentInfos] = useState<any[]>([]);
   const [savedJourneys, setSavedJourneys] = useState<any[]>([]);
+
   const [showTrips, setShowTrips] = useState(false);
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [directionsSegments, setDirectionsSegments] = useState<google.maps.DirectionsResult[]>([]);
+  const [extraMarkers, setExtraMarkers] = useState<{ position: google.maps.LatLngLiteral }[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -171,7 +181,13 @@ export function TripProvider({ children }: { children: ReactNode }) {
       alert("Error saving trip.");
     }
   }
-  async function getDirectionsHandler(e: FormEvent, maps: typeof google.maps, setDirections: any, setDirectionsSegments: any, setExtraMarkers: any) {
+  async function getDirectionsHandler(
+    e: FormEvent,
+    maps: typeof google.maps,
+    setDirectionsOverride?: any,
+    setDirectionsSegmentsOverride?: any,
+    setExtraMarkersOverride?: any
+  ) {
     e.preventDefault();
     if (!origin || !destination) {
       return alert("Enter both origin and destination.");
@@ -199,7 +215,11 @@ export function TripProvider({ children }: { children: ReactNode }) {
         }));
         setItinerary(normalized);
         setSegmentInfos(segmentInfos);
-        setDirectionsSegments(directionsSegments);
+        if (setDirectionsSegmentsOverride) {
+          setDirectionsSegmentsOverride(directionsSegments);
+        } else {
+          setDirectionsSegments(directionsSegments);
+        }
         setShowItinerary(true);
         setShowModal(false);
       } catch (err) {
@@ -222,9 +242,21 @@ export function TripProvider({ children }: { children: ReactNode }) {
             console.error("Drive error:", stat);
             return alert("Drive error: " + stat);
           }
-          setDirections(res);
-          setDirectionsSegments([]);
-          setExtraMarkers([]);
+          if (setDirectionsOverride) {
+            setDirectionsOverride(res);
+          } else {
+            setDirections(res);
+          }
+          if (setDirectionsSegmentsOverride) {
+            setDirectionsSegmentsOverride([]);
+          } else {
+            setDirectionsSegments([]);
+          }
+          if (setExtraMarkersOverride) {
+            setExtraMarkersOverride([]);
+          } else {
+            setExtraMarkers([]);
+          }
           const leg = res.routes[0].legs[0];
           const items = [
             {
@@ -286,6 +318,12 @@ export function TripProvider({ children }: { children: ReactNode }) {
         setSavedJourneys,
         showTrips,
         setShowTrips,
+        directions,
+        setDirections,
+        directionsSegments,
+        setDirectionsSegments,
+        extraMarkers,
+        setExtraMarkers,
         addStop,
         removeStop,
         updateStop,

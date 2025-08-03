@@ -2,28 +2,18 @@
 
 import React, { useState, useRef, useEffect, FormEvent } from "react";
 import { useLoadScript } from "@react-google-maps/api";
-// import Navbar from "./components/Navbar";
-import TripPlannerModal from "./components/TripPlannerModal";
-import ItineraryView from "./components/ItineraryView";
-import MapView from "./components/MapView";
-import { getTransitItinerary } from "./utils/transitUtils";
+import TripPlannerModal from "../components/TripPlannerModal";
+import ItineraryView from "../components/ItineraryView";
+import MapView from "../components/MapView";
+import { getTransitItinerary } from "../utils/transitUtils";
 import { Trash, Pencil, MapPinned } from "lucide-react";
+import { useTripContext } from "../context/TripContext";
 
-// Map container style and default center
 const containerStyle = {
   width: "100vw",
   height: "calc(100vh - 56px)",
 };
 const defaultCenter = { lat: 15.3913, lng: 73.8782 };
-
-// Helper: Combine date + time into a JS Date
-function makeDate(dateStr: string, timeStr: string): Date {
-  return new Date(`${dateStr}T${timeStr}:00`);
-}
-
-
-
-import { useTripContext } from "./context/TripContext";
 
 export default function HomePage() {
   const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!;
@@ -67,15 +57,15 @@ export default function HomePage() {
     deleteTripHandler,
     saveTripHandler,
     getDirectionsHandler,
+    directions,
+    setDirections,
+    directionsSegments,
+    setDirectionsSegments,
+    extraMarkers,
+    setExtraMarkers,
   } = useTripContext();
 
-  // Local state for directions and extraMarkers (not needed globally)
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
-  const [directionsSegments, setDirectionsSegments] = useState<google.maps.DirectionsResult[]>([]);
-  const [extraMarkers, setExtraMarkers] = useState<{ position: google.maps.LatLngLiteral }[]>([]);
-
-  // Map icon (define or import as needed)
-  const userStopIcon = ""; // fallback, update as needed
+  const userStopIcon = "";
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -176,10 +166,6 @@ export default function HomePage() {
             showItinerary={showItinerary}
             containerStyle={containerStyle}
             defaultCenter={defaultCenter}
-            directionsSegments={directionsSegments}
-            directions={directions}
-            travelMode={travelMode}
-            extraMarkers={extraMarkers}
             icon={userStopIcon}
           />
         )

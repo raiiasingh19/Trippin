@@ -55,7 +55,7 @@ export default function Navbar() {
                   <li>
                     <button
                       onClick={() => {
-                        setShowTrips(true);
+                        router.push("/my-trips");
                         setDropdownOpen(false);
                       }}
                       className="w-full text-left px-4 py-2 hover:bg-gray-100"

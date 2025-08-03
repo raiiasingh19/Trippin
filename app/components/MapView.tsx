@@ -2,27 +2,18 @@
 import React from "react";
 import { GoogleMap, DirectionsRenderer, Marker } from "@react-google-maps/api";
 
+
+import { useTripContext } from "../context/TripContext";
+
 interface MapViewProps {
   showItinerary: boolean;
   containerStyle: React.CSSProperties;
   defaultCenter: google.maps.LatLngLiteral;
-  directionsSegments: google.maps.DirectionsResult[];
-  directions: google.maps.DirectionsResult | null;
-  travelMode: google.maps.TravelMode;
-  extraMarkers: { position: google.maps.LatLngLiteral }[];
   icon: google.maps.Symbol | google.maps.Icon | string;
 }
 
-export default function MapView({
-  showItinerary,
-  containerStyle,
-  defaultCenter,
-  directionsSegments,
-  directions,
-  travelMode,
-  extraMarkers,
-  icon,
-}: MapViewProps) {
+export default function MapView({ showItinerary, containerStyle, defaultCenter, icon }: MapViewProps) {
+  const { directions, directionsSegments, extraMarkers, travelMode } = useTripContext();
   if (showItinerary) return null;
   return (
     <div className="mt-4">

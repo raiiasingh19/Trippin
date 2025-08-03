@@ -1,6 +1,8 @@
 "use client";
 
 import React, { FormEvent, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useTripContext } from "../context/TripContext";
 import { Autocomplete } from "@react-google-maps/api";
 
 interface StopTimes {
@@ -38,6 +40,7 @@ interface TripPlannerModalProps {
   onGetDirections: (e: FormEvent) => void;
 }
 
+
 export default function TripPlannerModal({
   showModal,
   onClose,
@@ -63,20 +66,27 @@ export default function TripPlannerModal({
   setFilterOption,
   onGetDirections,
 }: TripPlannerModalProps) {
-  if (!showModal) return null;
-
+  // All hooks must be at the top, before any return
+  const router = useRouter();
+  const { showItinerary } = useTripContext();
   const originRef = useRef<google.maps.places.Autocomplete | null>(null);
   const destinationRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const waypointRefs = useRef<(google.maps.places.Autocomplete | null)[]>(
-    []
-  );
+  const waypointRefs = useRef<(google.maps.places.Autocomplete | null)[]>([]);
   const destinationInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-  if (destinationInputRef.current) {
-    destinationInputRef.current.value = destination;
-  }
-}, [destination]);
+    if (showItinerary) {
+      router.push("/");
+    }
+  }, [showItinerary, router]);
+
+  useEffect(() => {
+    if (destinationInputRef.current) {
+      destinationInputRef.current.value = destination;
+    }
+  }, [destination]);
+
+  if (!showModal) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
