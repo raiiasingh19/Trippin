@@ -69,17 +69,50 @@ export default function HomePage() {
 
   const userStopIcon = "";
 
+  // When an external flow requests a recalculation (e.g. after adding a place),
+  // perform it once maps are loaded. Use an effect so we do not call setState
+  // during render (which causes the "Cannot update a component while
+  // rendering a different component" React error).
+  useEffect(() => {
+    if (!isLoaded || !pendingRecalc) return;
+
+    // If origin/destination aren't set, clear the flag and do nothing.
+    if (!origin || !destination) {
+      setPendingRecalc(false);
+      return;
+    }
+
+    const run = async () => {
+      const dummy = { preventDefault: () => {} } as unknown as FormEvent;
+      try {
+        await getDirectionsHandler(dummy, window.google.maps, setDirections, setDirectionsSegments, setExtraMarkers);
+      } catch (e) {
+        console.error("Recalc error:", e);
+      } finally {
+        setPendingRecalc(false);
+      }
+    };
+
+    run();
+    // only depend on the values we read
+  }, [isLoaded, pendingRecalc, origin, destination, getDirectionsHandler, setDirections, setDirectionsSegments, setExtraMarkers, setPendingRecalc]);
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* If an external flow requested a recalculation (e.g. after adding a place), perform it once maps are loaded */}
       {/* we need window.google available (isLoaded) and pendingRecalc true */}
       {isLoaded && pendingRecalc && (
         (() => {
+          // Only attempt an automatic recalculation if we have both origin and destination.
+          // This avoids triggering the user-facing "Enter both origin and destination" alert
+          // when a background flow (like adding a place) requests a recalc.
+          if (!origin || !destination) {
+            setPendingRecalc(false);
+            return null;
+          }
+
           // perform a single recalculation using the context handler
-          // create a dummy event with preventDefault
           const dummy = { preventDefault: () => {} } as unknown as FormEvent;
-          // call the shared handler which lives in context
-          // Note: getDirectionsHandler expects (e, maps, setDirections, setDirectionsSegments, setExtraMarkers)
           (async () => {
             try {
               await getDirectionsHandler(dummy, window.google.maps, setDirections, setDirectionsSegments, setExtraMarkers);
