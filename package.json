@@ -21,7 +21,6 @@
     "next-auth": "^4.24.11",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-google-maps-api": "^1.0.8",
     "react-icons": "^5.5.0"
   },
   "devDependencies": {
