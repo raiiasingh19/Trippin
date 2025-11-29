@@ -34,3 +34,57 @@ export async function DELETE(
 
   return NextResponse.json({ message: "Journey deleted" }, { status: 200 });
 }
+
+// PUT /api/journeys/:id
+export async function PUT(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    return NextResponse.json({ message: "Not authenticated" }, { status: 401 });
+  }
+
+  await connectMongo();
+  const user = await User.findOne({ email: session.user?.email });
+  if (!user) {
+    return NextResponse.json({ message: "User not found" }, { status: 404 });
+  }
+
+  const { id } = context.params;
+  const {
+    start,
+    destination,
+    waypoints,
+    stopTimes,
+    travelMode,
+    filterOption,
+    startTime,
+    endTime,
+    itinerary,
+  } = await request.json();
+
+  const updated = await Journey.findOneAndUpdate(
+    { _id: id, userId: user._id },
+    {
+      $set: {
+        start,
+        destination,
+        waypoints,
+        stopTimes,
+        travelMode,
+        filterOption,
+        startTime,
+        endTime,
+        itinerary,
+      },
+    },
+    { new: true }
+  );
+
+  if (!updated) {
+    return NextResponse.json({ message: "Journey not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(updated, { status: 200 });
+}

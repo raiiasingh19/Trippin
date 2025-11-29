@@ -4,7 +4,7 @@ import React, { useState, useRef, useEffect, FormEvent } from "react";
 import { useLoadScript } from "@react-google-maps/api";
 import TripPlannerModal from "../components/TripPlannerModal";
 import ItineraryView from "../components/ItineraryView";
-import MapView from "../components/MapView";
+// MapView usage on homepage replaced with a placeholder for now
 import { getTransitItinerary } from "../utils/transitUtils";
 import { Trash, Pencil, MapPinned } from "lucide-react";
 import { useTripContext } from "../context/TripContext";
@@ -210,21 +210,19 @@ export default function HomePage() {
         itinerary={itinerary}
         onSaveTrip={saveTripHandler}
         onShowMap={() => setShowItinerary(false)}
+        isLoaded={isLoaded}
+        loadError={loadError}
       />
 
       {!showItinerary && (
-        loadError ? (
-          <div>Error loading maps</div>
-        ) : !isLoaded ? (
-          <div>Loading map...</div>
-        ) : (
-          <MapView
-            showItinerary={showItinerary}
-            containerStyle={containerStyle}
-            defaultCenter={defaultCenter}
-            icon={userStopIcon}
-          />
-        )
+        <div className="flex items-center justify-center h-[50vh] bg-white border-t">
+          <div className="text-center">
+            <div className="text-xl font-semibold text-gray-900">Map preview moved</div>
+            <div className="text-gray-600 mt-1">
+              View each trip’s route in <span className="font-medium">My Trips</span>.
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

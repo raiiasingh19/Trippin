@@ -9,6 +9,8 @@ interface StopTimes {
 }
 
 interface TripContextType {
+  editingJourneyId: string | null;
+  setEditingJourneyId: (val: string | null) => void;
   tripDate: string;
   setTripDate: (val: string) => void;
   origin: string;
@@ -57,6 +59,7 @@ interface TripContextType {
   editSavedTripHandler: () => void;
   deleteTripHandler: (id: string) => void;
   saveTripHandler: () => Promise<void>;
+  updateTripHandler: () => Promise<void>;
   getDirectionsHandler: (e: FormEvent, maps: typeof google.maps, setDirections?: any, setDirectionsSegments?: any, setExtraMarkers?: any) => Promise<void>;
 }
 
@@ -73,6 +76,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [tripDate, setTripDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [origin, setOrigin] = useState("kk birla goa campus");
   const [destination, setDestination] = useState("");
+  const [editingJourneyId, setEditingJourneyId] = useState<string | null>(null);
   const [waypoints, setWaypoints] = useState<string[]>([]);
   const [originTime, setOriginTime] = useState("");
   const [destinationTime, setDestinationTime] = useState("");
@@ -137,6 +141,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
   function editSavedTripHandler() {
     if (!savedJourneys.length) return alert("No saved trips.");
     const j = savedJourneys[savedJourneys.length - 1];
+    setEditingJourneyId(j._id?.toString?.() || j._id);
     setOrigin(j.start);
     setDestination(j.destination);
     setWaypoints(j.waypoints || []);
@@ -188,6 +193,43 @@ export function TripProvider({ children }: { children: ReactNode }) {
       }
     } catch {
       alert("Error saving trip.");
+    }
+  }
+  async function updateTripHandler() {
+    if (!editingJourneyId) {
+      alert("No trip selected for editing.");
+      return;
+    }
+    const payload = {
+      start: origin,
+      destination,
+      waypoints,
+      stopTimes,
+      travelMode,
+      filterOption,
+      startTime: new Date(`${tripDate}T${originTime}:00`),
+      endTime: new Date(`${tripDate}T${destinationTime}:00`),
+      itinerary: itinerary.map((r) => `${r.title}: ${r.description}`).join("\n"),
+    };
+    try {
+      const res = await fetch(`/api/journeys/${editingJourneyId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to update trip");
+      }
+      const updated = await res.json();
+      setSavedJourneys((prev: any[]) =>
+        prev.map((j) => (j._id === updated._id ? updated : j))
+      );
+      alert("Trip updated.");
+      setEditingJourneyId(null);
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || "Error updating trip.");
     }
   }
   async function getDirectionsHandler(
@@ -297,6 +339,8 @@ export function TripProvider({ children }: { children: ReactNode }) {
   return (
     <TripContext.Provider
       value={{
+        editingJourneyId,
+        setEditingJourneyId,
   pendingPlace,
   setPendingPlace,
   pendingRecalc,
@@ -345,6 +389,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
         editSavedTripHandler,
         deleteTripHandler,
         saveTripHandler,
+        updateTripHandler,
         getDirectionsHandler,
       }}
     >
