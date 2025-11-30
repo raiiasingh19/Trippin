@@ -11,6 +11,20 @@ interface StopTimes {
 interface TripContextType {
   editingJourneyId: string | null;
   setEditingJourneyId: (val: string | null) => void;
+  postSaveRedirectToTrips: boolean;
+  setPostSaveRedirectToTrips: (v: boolean) => void;
+  showRefreshmentModal: boolean;
+  setShowRefreshmentModal: (v: boolean) => void;
+  refreshmentItems: any[];
+  setRefreshmentItems: (v: any[]) => void;
+  refreshmentNote: string | null;
+  setRefreshmentNote: (v: string | null) => void;
+  refreshmentInsertIndex: number | null;
+  setRefreshmentInsertIndex: (v: number | null) => void;
+  pendingShowAmenities: boolean;
+  setPendingShowAmenities: (v: boolean) => void;
+  suggestRefreshments: () => Promise<void>;
+  forceShowAmenities: () => Promise<void>;
   tripDate: string;
   setTripDate: (val: string) => void;
   origin: string;
@@ -58,7 +72,7 @@ interface TripContextType {
   viewSavedTripHandler: () => void;
   editSavedTripHandler: () => void;
   deleteTripHandler: (id: string) => void;
-  saveTripHandler: () => Promise<void>;
+  saveTripHandler: () => Promise<any>;
   updateTripHandler: () => Promise<void>;
   getDirectionsHandler: (e: FormEvent, maps: typeof google.maps, setDirections?: any, setDirectionsSegments?: any, setExtraMarkers?: any) => Promise<void>;
 }
@@ -85,6 +99,12 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [travelMode, setTravelMode] = useState<google.maps.TravelMode>("DRIVING" as google.maps.TravelMode);
   const [showModal, setShowModal] = useState(false);
   const [showItinerary, setShowItinerary] = useState(false);
+  const [showRefreshmentModal, setShowRefreshmentModal] = useState(false);
+  const [refreshmentItems, setRefreshmentItems] = useState<any[]>([]);
+  const [refreshmentNote, setRefreshmentNote] = useState<string | null>(null);
+  const [refreshmentInsertIndex, setRefreshmentInsertIndex] = useState<number | null>(null);
+  const [pendingShowAmenities, setPendingShowAmenities] = useState(false);
+  const [postSaveRedirectToTrips, setPostSaveRedirectToTrips] = useState(false);
   const [itinerary, setItinerary] = useState<{ title: string; description: string }[]>([]);
   const [segmentInfos, setSegmentInfos] = useState<any[]>([]);
   const [savedJourneys, setSavedJourneys] = useState<any[]>([]);
@@ -98,6 +118,121 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [directionsSegments, setDirectionsSegments] = useState<google.maps.DirectionsResult[]>([]);
   const [extraMarkers, setExtraMarkers] = useState<{ position: google.maps.LatLngLiteral }[]>([]);
+
+  const REFRESHMENT_THRESHOLD_SECS = 2 * 60 * 60; // 2 hours
+  const hasRefreshmentKeyword = (s: string) => {
+    const q = (s || "").toLowerCase();
+    return ["restaurant","cafe","hotel","resort","restroom","toilet","washroom","park","store","supermarket"].some(k => q.includes(k));
+  };
+  async function suggestRefreshmentsWith(options?: {
+    transitSegments?: google.maps.DirectionsResult[];
+    driving?: google.maps.DirectionsResult | null;
+  }) {
+    try {
+      setShowRefreshmentModal(false);
+      setRefreshmentItems([]);
+      setRefreshmentNote(null);
+      setRefreshmentInsertIndex(null);
+      const stops = waypoints.filter((w) => (w || "").trim());
+      let longLegLabel = "";
+      const segs = options?.transitSegments && options.transitSegments.length ? options.transitSegments : directionsSegments;
+      if (travelMode === "TRANSIT" && segs.length > 0) {
+        for (let i = 0; i < segs.length; i++) {
+          const seg = segs[i];
+          const leg = seg.routes?.[0]?.legs?.[0];
+          if (!leg) continue;
+          const dur = leg.duration?.value || 0;
+          const a = [origin, ...stops, destination][i];
+          const b = [origin, ...stops, destination][i+1];
+          const hasRefresh = [a, b].some(x => x && hasRefreshmentKeyword(x));
+          if (dur > REFRESHMENT_THRESHOLD_SECS && !hasRefresh) {
+            longLegLabel = `${a} → ${b}`;
+            setRefreshmentInsertIndex(i);
+            const q = `restaurants near ${b}`;
+            const [gData, oData] = await Promise.all([
+              fetch(`/api/explore?q=${encodeURIComponent(q)}`).then(r => r.json()).catch(() => ({ results: [] })),
+              fetch(`/api/amenities?lat=${encodeURIComponent(leg.end_location.lat())}&lng=${encodeURIComponent(leg.end_location.lng())}&radius=1200`).then(r => r.json()).catch(() => ({ results: [] })),
+            ]);
+            const merged = [...(gData.results || []), ...(oData.results || [])];
+            setRefreshmentItems(merged.slice(0, 8));
+            setRefreshmentNote(`Long leg detected (${longLegLabel}). Consider a refreshment stop.`);
+            setShowRefreshmentModal(true);
+            break;
+          }
+        }
+      } else {
+        const drv = options?.driving || directions;
+        if (!drv) return;
+        const legs = drv.routes?.[0]?.legs || [];
+        const nodes = [origin, ...stops, destination];
+        for (let i = 0; i < legs.length; i++) {
+          const leg = legs[i];
+          const dur = leg.duration?.value || 0;
+          const a = nodes[i];
+          const b = nodes[i+1];
+          const hasRefresh = [a, b].some(x => x && hasRefreshmentKeyword(x));
+          if (dur > REFRESHMENT_THRESHOLD_SECS && !hasRefresh) {
+            longLegLabel = `${a} → ${b}`;
+            setRefreshmentInsertIndex(i);
+            const q = `restaurants near ${b}`;
+            const [gData, oData] = await Promise.all([
+              fetch(`/api/explore?q=${encodeURIComponent(q)}`).then(r => r.json()).catch(() => ({ results: [] })),
+              fetch(`/api/amenities?lat=${encodeURIComponent(leg.end_location.lat())}&lng=${encodeURIComponent(leg.end_location.lng())}&radius=1200`).then(r => r.json()).catch(() => ({ results: [] })),
+            ]);
+            const merged = [...(gData.results || []), ...(oData.results || [])];
+            setRefreshmentItems(merged.slice(0, 8));
+            setRefreshmentNote(`Long leg detected (${longLegLabel}). Consider a refreshment stop.`);
+            setShowRefreshmentModal(true);
+            break;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+  const suggestRefreshments = async () => suggestRefreshmentsWith();
+
+  async function forceShowAmenities() {
+    try {
+      // Do not toggle modal off to avoid render loops; just overwrite contents and show
+      setRefreshmentItems([]);
+      setRefreshmentNote(null);
+      const stops = waypoints.filter((w) => (w || "").trim());
+      let insertIdx = 0;
+      let queryLabel = destination;
+      let lat = 15.491997;
+      let lng = 73.8278;
+      if (travelMode === "TRANSIT" && directionsSegments.length > 0) {
+        const seg = directionsSegments[0];
+        const leg = seg.routes?.[0]?.legs?.[0];
+        if (leg) {
+          lat = leg.end_location.lat();
+          lng = leg.end_location.lng();
+          queryLabel = [origin, ...stops, destination][1] || destination;
+        }
+      } else if (directions) {
+        const leg = directions.routes?.[0]?.legs?.[0];
+        if (leg) {
+          lat = leg.end_location.lat();
+          lng = leg.end_location.lng();
+          queryLabel = [origin, ...stops, destination][1] || destination;
+        }
+      }
+      setRefreshmentInsertIndex(insertIdx);
+      const q = `restaurants near ${queryLabel}`;
+      const [gData, oData] = await Promise.all([
+        fetch(`/api/explore?q=${encodeURIComponent(q)}`).then(r => r.json()).catch(() => ({ results: [] })),
+        fetch(`/api/amenities?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&radius=1200`).then(r => r.json()).catch(() => ({ results: [] })),
+      ]);
+      const merged = [...(gData.results || []), ...(oData.results || [])];
+      setRefreshmentItems(merged.slice(0, 8));
+      setRefreshmentNote(`Nearby options around ${queryLabel}`);
+      setShowRefreshmentModal(true);
+    } catch {
+      // ignore
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -187,13 +322,19 @@ export function TripProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const saved = await res.json();
         setSavedJourneys((j) => [...j, saved]);
+        // set editing id so subsequent Save updates the same journey
+        if (saved && saved._id) {
+          setEditingJourneyId(saved._id as string);
+        }
         alert("Trip saved.");
+        return saved;
       } else {
         alert("Error saving trip.");
       }
     } catch {
       alert("Error saving trip.");
     }
+    return null;
   }
   async function updateTripHandler() {
     if (!editingJourneyId) {
@@ -240,6 +381,13 @@ export function TripProvider({ children }: { children: ReactNode }) {
     setExtraMarkersOverride?: any
   ) {
     e.preventDefault();
+    // If launched from the planner modal, this is a fresh plan; ensure we are not in edit mode
+    if (showModal) {
+      try {
+        // clear any stale editing id so subsequent Save performs a POST (new trip)
+        setEditingJourneyId(null);
+      } catch {}
+    }
     if (!origin || !destination) {
       return alert("Enter both origin and destination.");
     }
@@ -249,7 +397,242 @@ export function TripProvider({ children }: { children: ReactNode }) {
       try {
         const departureDate = new Date(`${tripDate}T${originTime}:00`);
         const arrivalDate = new Date(`${tripDate}T${destinationTime}:00`);
-        const { itinerary: raw, segmentInfos, directionsSegments } =
+        // Prefer WHOLE-TRIP transit first to avoid fragmented walking
+        const tryWholeTripVariants = async (): Promise<google.maps.DirectionsResult | null> => {
+          const variants: Array<google.maps.DirectionsRequest> = [];
+          variants.push({
+            origin,
+            destination,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            transitOptions: {
+              modes: [google.maps.TransitMode.BUS],
+              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+              departureTime: departureDate,
+            },
+          });
+          variants.push({
+            origin,
+            destination,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            transitOptions: {
+              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+              departureTime: departureDate,
+            },
+          });
+          variants.push({
+            origin,
+            destination,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            transitOptions: {
+              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+            },
+          });
+          if (!Number.isNaN(arrivalDate.getTime())) {
+            variants.push({
+              origin,
+              destination,
+              travelMode: google.maps.TravelMode.TRANSIT,
+              transitOptions: {
+                routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+                arrivalTime: arrivalDate,
+              },
+            });
+          }
+          const plus30 = new Date(departureDate.getTime() + 30 * 60 * 1000);
+          const plus60 = new Date(departureDate.getTime() + 60 * 60 * 1000);
+          variants.push({
+            origin,
+            destination,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            transitOptions: {
+              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+              departureTime: plus30,
+            },
+          });
+          variants.push({
+            origin,
+            destination,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            transitOptions: {
+              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+              departureTime: plus60,
+            },
+          });
+          for (const req of variants) {
+            // eslint-disable-next-line no-await-in-loop
+            const result = await new Promise<google.maps.DirectionsResult | null>((resolve) => {
+              svc.route(req, (whole, status) => {
+                if (status === google.maps.DirectionsStatus.OK && whole) resolve(whole);
+                else resolve(null);
+              });
+            });
+            if (result) return result;
+          }
+          return null;
+        };
+        const whole = await tryWholeTripVariants();
+        const wholeHasTransit =
+          !!whole &&
+          (whole.routes?.[0]?.legs?.[0]?.steps || []).some(
+            (st: any) => st.travel_mode === google.maps.TravelMode.TRANSIT
+          );
+        if (whole && wholeHasTransit) {
+          if (setDirectionsSegmentsOverride) {
+            setDirectionsSegmentsOverride([whole]);
+          } else {
+            setDirectionsSegments([whole]);
+          }
+          // Minimal text; UI renders details from directionsSegments
+          setItinerary([{ title: origin, description: "" }, { title: destination, description: "" }]);
+          setSegmentInfos([]);
+          setShowItinerary(true);
+          setTimeout(() => setShowModal(false), 0);
+          return;
+        }
+        // Fallback 2: Try via known South Goa hubs (helps Colva/Majorda/Margao routes)
+        const tryHubChain = async (hub: string): Promise<google.maps.DirectionsResult[] | null> => {
+          const legReq = (a: string, b: string, dep: Date) =>
+            new Promise<google.maps.DirectionsResult | null>((resolve) => {
+              svc.route(
+                {
+                  origin: a,
+                  destination: b,
+                  travelMode: google.maps.TravelMode.TRANSIT,
+                  transitOptions: {
+                    routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+                    departureTime: dep,
+                  },
+                },
+                (res, status) => {
+                  if (status === google.maps.DirectionsStatus.OK && res) resolve(res);
+                  else resolve(null);
+                }
+              );
+            });
+          const first = await legReq(origin, hub, departureDate);
+          if (!first) return null;
+          // chain second with last arrival time as departure if present
+          let nextDep = departureDate;
+          try {
+            const leg = (first.routes?.[0]?.legs?.[0] as any) || null;
+            const arrVal = leg?.arrival_time?.value;
+            if (arrVal) nextDep = arrVal instanceof Date ? arrVal : new Date(arrVal);
+          } catch {}
+          const second = await legReq(hub, destination, nextDep);
+          if (!second) return null;
+          const hasTransit =
+            (first.routes?.[0]?.legs?.[0]?.steps || []).some((st: any) => st.travel_mode === google.maps.TravelMode.TRANSIT) ||
+            (second.routes?.[0]?.legs?.[0]?.steps || []).some((st: any) => st.travel_mode === google.maps.TravelMode.TRANSIT);
+          return hasTransit ? [first, second] : null;
+        };
+        const southGoaHubs = ["Margao Kadamba Bus Stand, Goa", "Majorda Bus Stand, Goa"];
+        for (const hub of southGoaHubs) {
+          // eslint-disable-next-line no-await-in-loop
+          const chain = await tryHubChain(hub);
+          if (chain) {
+            if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(chain);
+            else setDirectionsSegments(chain);
+            setItinerary([{ title: origin, description: "" }, { title: hub, description: "" }, { title: destination, description: "" }]);
+            setSegmentInfos([]);
+            setShowItinerary(true);
+            setTimeout(() => setShowModal(false), 0);
+            return;
+          }
+        }
+        // Fallback 3: Find nearest bus stop to destination and chain via that stop
+        const geocoder = new maps.Geocoder();
+        const geocodeDest = await new Promise<google.maps.GeocoderResult | null>((resolve) => {
+          geocoder.geocode({ address: destination }, (results, status) => {
+            if (status === "OK" && results && results[0]) resolve(results[0]);
+            else resolve(null);
+          });
+        });
+        if (geocodeDest) {
+          const dloc = geocodeDest.geometry?.location;
+          const dlat = dloc?.lat();
+          const dlng = dloc?.lng();
+          if (typeof dlat === "number" && typeof dlng === "number") {
+            try {
+              const resp = await fetch(`/api/amenities?lat=${encodeURIComponent(dlat)}&lng=${encodeURIComponent(dlng)}&radius=2000&types=bus`);
+              if (resp.ok) {
+                const data = await resp.json();
+                const stops = (data.results || []) as Array<{ name: string; location: { lat: number; lng: number } }>;
+                // choose nearest by distance
+                let best: any = null;
+                let bestd = Number.POSITIVE_INFINITY;
+                for (const s of stops) {
+                  const dy = (s.location.lat - dlat) * 111_000;
+                  const dx = (s.location.lng - dlng) * 111_000 * Math.cos((dlat * Math.PI) / 180);
+                  const dist = Math.sqrt(dx * dx + dy * dy);
+                  if (dist < bestd) {
+                    bestd = dist;
+                    best = s;
+                  }
+                }
+                if (best) {
+                  const stopLatLng = new maps.LatLng(best.location.lat, best.location.lng);
+                  // chain origin -> stop (TRANSIT) -> destination (WALK)
+                  const legTransit = (a: string | google.maps.LatLng, b: string | google.maps.LatLng, dep: Date) =>
+                    new Promise<google.maps.DirectionsResult | null>((resolve) => {
+                      svc.route(
+                        {
+                          origin: a,
+                          destination: b,
+                          travelMode: google.maps.TravelMode.TRANSIT,
+                          transitOptions: {
+                            routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+                            departureTime: dep,
+                          },
+                        },
+                        (res, status) => {
+                          if (status === google.maps.DirectionsStatus.OK && res) resolve(res);
+                          else resolve(null);
+                        }
+                      );
+                    });
+                  const legWalk = (a: string | google.maps.LatLng, b: string | google.maps.LatLng) =>
+                    new Promise<google.maps.DirectionsResult | null>((resolve) => {
+                      svc.route(
+                        {
+                          origin: a,
+                          destination: b,
+                          travelMode: google.maps.TravelMode.WALKING,
+                        },
+                        (res, status) => {
+                          if (status === google.maps.DirectionsStatus.OK && res) resolve(res);
+                          else resolve(null);
+                        }
+                      );
+                    });
+                  const first = await legTransit(origin, stopLatLng, departureDate);
+                  if (first) {
+                    let nextDep = departureDate;
+                    try {
+                      const leg = (first.routes?.[0]?.legs?.[0] as any) || null;
+                      const arrVal = leg?.arrival_time?.value;
+                      if (arrVal) nextDep = arrVal instanceof Date ? arrVal : new Date(arrVal);
+                    } catch {}
+                    const walk2 = await legWalk(stopLatLng, destination);
+                    if (walk2) {
+                      const chain = [first, walk2];
+                      if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(chain);
+                      else setDirectionsSegments(chain);
+                      setItinerary([{ title: origin, description: "" }, { title: best.name || "Bus Stop", description: "" }, { title: destination, description: "" }]);
+                      setSegmentInfos([]);
+                      setShowItinerary(true);
+                      setTimeout(() => setShowModal(false), 0);
+                      return;
+                    }
+                  }
+                }
+              }
+            } catch {
+              // ignore bus stop fallback errors
+            }
+          }
+        }
+        // Fallback to slice-by-slice transit if whole-trip failed
+        const { itinerary: raw, segmentInfos, directionsSegments: transitSegs } =
           await getTransitItinerary(
             [origin, ...stops, destination],
             svc,
@@ -264,15 +647,50 @@ export function TripProvider({ children }: { children: ReactNode }) {
           title: r.title,
           description: r.description ?? "",
         }));
+        // Detect if no transit was found across all segments; if so, try whole-trip transit once more (already tried above),
+        // otherwise render the slice result.
+        const noTransitAcross = transitSegs.length > 0
+          ? !transitSegs.some((seg) =>
+              (seg.routes?.[0]?.legs?.[0]?.steps || []).some(
+                (st: any) => st.travel_mode === google.maps.TravelMode.TRANSIT
+              )
+            )
+          : true;
+        if (noTransitAcross) {
+          const whole = await tryWholeTripVariants();
+          if (whole) {
+            if (setDirectionsSegmentsOverride) {
+              setDirectionsSegmentsOverride([whole]);
+            } else {
+              setDirectionsSegments([whole]);
+            }
+            // keep itinerary text minimal; UI renders details from directionsSegments
+            setItinerary(
+              normalized.length
+                ? normalized
+                : [{ title: origin, description: "" }, { title: destination, description: "" }]
+            );
+            setSegmentInfos(segmentInfos);
+          } else {
+            if (setDirectionsSegmentsOverride) {
+              setDirectionsSegmentsOverride(transitSegs);
+            } else {
+              setDirectionsSegments(transitSegs);
+            }
+            setItinerary(normalized);
+            setSegmentInfos(segmentInfos);
+          }
+        } else {
         setItinerary(normalized);
         setSegmentInfos(segmentInfos);
         if (setDirectionsSegmentsOverride) {
-          setDirectionsSegmentsOverride(directionsSegments);
+            setDirectionsSegmentsOverride(transitSegs);
         } else {
-          setDirectionsSegments(directionsSegments);
+            setDirectionsSegments(transitSegs);
+          }
         }
         setShowItinerary(true);
-        setShowModal(false);
+        setTimeout(() => setShowModal(false), 0);
       } catch (err) {
         console.error(err);
         alert("Transit error: " + err);
@@ -341,6 +759,20 @@ export function TripProvider({ children }: { children: ReactNode }) {
       value={{
         editingJourneyId,
         setEditingJourneyId,
+        showRefreshmentModal,
+        setShowRefreshmentModal,
+        refreshmentItems,
+        setRefreshmentItems,
+        refreshmentNote,
+        setRefreshmentNote,
+        refreshmentInsertIndex,
+        setRefreshmentInsertIndex,
+        pendingShowAmenities,
+        setPendingShowAmenities,
+        suggestRefreshments: suggestRefreshments,
+        forceShowAmenities,
+        postSaveRedirectToTrips,
+        setPostSaveRedirectToTrips,
   pendingPlace,
   setPendingPlace,
   pendingRecalc,

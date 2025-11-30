@@ -21,6 +21,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
 
   // body can be { placeId } or { place: {...} }
   let placeName = "";
+  const requestedIndex = typeof body.index === "number" ? body.index : undefined;
   if (body.placeId) {
     const p = await Place.findById(body.placeId);
     if (!p) return NextResponse.json({ message: "Place not found" }, { status: 404 });
@@ -45,7 +46,25 @@ export async function POST(request: NextRequest, context: { params: { id: string
 
   let insertAt: number | undefined = undefined;
 
-  if (providedStop) {
+  if (typeof requestedIndex === "number" && requestedIndex >= 0) {
+    // Special case: requestedIndex === waypoints.length + 1 means "after destination"
+    if (requestedIndex === (journey.waypoints?.length || 0) + 1) {
+      journey.waypoints = journey.waypoints || [];
+      journey.stopTimes = journey.stopTimes || [];
+      if (journey.destination) {
+        journey.waypoints.push(journey.destination);
+        journey.stopTimes.push({ arriveBy: "", leaveBy: "" });
+      }
+      journey.destination = placeName;
+      // textual itinerary: append a note
+      const entry = `${placeName}: Added via Explore`;
+      if (!journey.itinerary) journey.itinerary = entry;
+      else journey.itinerary = `${journey.itinerary}\n${entry}`;
+      await journey.save();
+      return NextResponse.json({ message: "added", journey }, { status: 200 });
+    }
+    insertAt = Math.min(requestedIndex, journey.waypoints.length);
+  } else if (providedStop) {
     // parse provided time (prefer arriveBy, then leaveBy)
     const newTimeStr = providedStop.arriveBy || providedStop.leaveBy;
     const newTs = newTimeStr ? Date.parse(newTimeStr) : NaN;

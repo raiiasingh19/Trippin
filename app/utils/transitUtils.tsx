@@ -16,30 +16,109 @@ export async function getTransitItinerary(
   segmentInfos: any[];
   directionsSegments: google.maps.DirectionsResult[];
 }> {
-  // 1) fetch each slice
-  const legs = await Promise.all(
-    segmentPoints.slice(0, -1).map(
-      (_, i) =>
-        new Promise<google.maps.DirectionsResult>((resolve, reject) =>
+  const combineDate = (base: Date, hhmm?: string): Date | undefined => {
+    if (!hhmm) return undefined;
+    const [hh, mm] = hhmm.split(":").map((v) => parseInt(v, 10));
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return undefined;
+    const d = new Date(base);
+    d.setHours(hh, mm, 0, 0);
+    return d;
+  };
+
+  // Helper: route a single slice with fallbacks (BUS → generic TRANSIT → WALKING)
+  const routeSlice = (a: string, b: string, opts?: { departAt?: Date; arriveBy?: Date }) =>
+    new Promise<google.maps.DirectionsResult>((resolve, reject) => {
+      const tryGenericTransit = () =>
+        svc.route(
+          {
+            origin: a,
+            destination: b,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            transitOptions: {
+              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+              ...(opts?.departAt ? { departureTime: opts.departAt } : {}),
+              ...(opts?.arriveBy ? { arrivalTime: opts.arriveBy } : {}),
+            },
+          },
+          (r2, s2) => {
+            if (s2 === google.maps.DirectionsStatus.OK && r2) {
+              resolve(r2);
+            } else {
+              // Final fallback: WALKING (to avoid hard failure)
+              svc.route(
+                {
+                  origin: a,
+                  destination: b,
+                  travelMode: google.maps.TravelMode.WALKING,
+                },
+                (r3, s3) => {
+                  if (s3 === google.maps.DirectionsStatus.OK && r3) resolve(r3);
+                  else reject(s3);
+                }
+              );
+            }
+          }
+        );
+
+      // First attempt: BUS only
           svc.route(
             {
-              origin: segmentPoints[i],
-              destination: segmentPoints[i + 1],
+          origin: a,
+          destination: b,
               travelMode: google.maps.TravelMode.TRANSIT,
               transitOptions: {
                 modes: [google.maps.TransitMode.BUS],
                 routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-                departureTime: originTime,                  // ← added here
-              },
-            },
-            (r, s) =>
-              s === google.maps.DirectionsStatus.OK && r
-                ? resolve(r)
-                : reject(s)
-          )
-        )
-    )
-  );
+            ...(opts?.departAt ? { departureTime: opts.departAt } : {}),
+            ...(opts?.arriveBy && !opts?.departAt ? { arrivalTime: opts.arriveBy } : {}),
+          },
+        },
+        (r1, s1) => {
+          if (s1 === google.maps.DirectionsStatus.OK && r1) resolve(r1);
+          else tryGenericTransit();
+        }
+      );
+    });
+
+  // 1) fetch each slice sequentially with fallbacks and carry forward arrival times
+  const legs: google.maps.DirectionsResult[] = [];
+  let lastArrival: Date | undefined = originTime;
+  for (let i = 0; i < segmentPoints.length - 1; i++) {
+    let departAt: Date | undefined = undefined;
+    let arriveBy: Date | undefined = undefined;
+    // First slice: honor originTime as departure
+    if (i === 0) {
+      departAt = originTime;
+    }
+    // If we have stopTimes for the stop just before this slice, prefer leaveBy
+    if (i - 1 >= 0 && stopTimes[i - 1]) {
+      const st = stopTimes[i - 1];
+      const leave = combineDate(originTime, st.leaveBy);
+      const arrive = combineDate(originTime, st.arriveBy);
+      departAt = leave || departAt || arrive || lastArrival || departAt;
+    } else if (!departAt && lastArrival) {
+      departAt = lastArrival;
+    }
+    // Final slice into destination: if destinationTime is provided, try to honor arrival
+    if (i === segmentPoints.length - 2 && destinationTime) {
+      if (!departAt) arriveBy = destinationTime;
+    }
+    // eslint-disable-next-line no-await-in-loop
+    const res = await routeSlice(segmentPoints[i], segmentPoints[i + 1], {
+      departAt,
+      arriveBy,
+    });
+    legs.push(res);
+    try {
+      const leg = res.routes?.[0]?.legs?.[0] as any;
+      if (leg?.arrival_time?.value) {
+        const v = leg.arrival_time.value;
+        lastArrival = v instanceof Date ? v : new Date(v);
+      }
+    } catch {
+      // ignore bad arrival parsing
+    }
+  }
 
   const rows: Row[] = [];
   const segmentInfos: any[] = [];

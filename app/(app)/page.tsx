@@ -4,10 +4,13 @@ import React, { useState, useRef, useEffect, FormEvent } from "react";
 import { useLoadScript } from "@react-google-maps/api";
 import TripPlannerModal from "../components/TripPlannerModal";
 import ItineraryView from "../components/ItineraryView";
+import RefreshmentModal from "../components/RefreshmentModal";
 // MapView usage on homepage replaced with a placeholder for now
 import { getTransitItinerary } from "../utils/transitUtils";
 import { Trash, Pencil, MapPinned } from "lucide-react";
 import { useTripContext } from "../context/TripContext";
+
+const LIBRARIES: ("places")[] = ["places"];
 
 const containerStyle = {
   width: "100vw",
@@ -19,7 +22,7 @@ export default function HomePage() {
   const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!;
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: ["places"],
+    libraries: LIBRARIES,
   });
   const {
     setWaypoints,
@@ -65,6 +68,10 @@ export default function HomePage() {
     setExtraMarkers,
     pendingRecalc,
     setPendingRecalc,
+    pendingShowAmenities,
+    setPendingShowAmenities,
+    suggestRefreshments,
+    forceShowAmenities,
   } = useTripContext();
 
   const userStopIcon = "";
@@ -97,6 +104,20 @@ export default function HomePage() {
     // only depend on the values we read
   }, [isLoaded, pendingRecalc, origin, destination, getDirectionsHandler, setDirections, setDirectionsSegments, setExtraMarkers, setPendingRecalc]);
 
+  // After recalculation, if user explicitly asked to see amenities, open modal
+  useEffect(() => {
+    if (!isLoaded || pendingRecalc || !pendingShowAmenities) return;
+    if (!origin || !destination) return;
+    (async () => {
+      try {
+        await forceShowAmenities();
+      } finally {
+        setPendingShowAmenities(false);
+      }
+    })();
+    // Intentionally do not include forceShowAmenities in deps to avoid loops on function identity
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, pendingRecalc, pendingShowAmenities, origin, destination, setPendingShowAmenities]);
   return (
     <div className="min-h-screen bg-gray-100">
       {/* If an external flow requested a recalculation (e.g. after adding a place), perform it once maps are loaded */}
@@ -204,7 +225,6 @@ export default function HomePage() {
           onGetDirections={(e) => getDirectionsHandler(e, window.google.maps, setDirections, setDirectionsSegments, setExtraMarkers)}
         />
       )}
-
       <ItineraryView
         showItinerary={showItinerary}
         itinerary={itinerary}
@@ -213,6 +233,9 @@ export default function HomePage() {
         isLoaded={isLoaded}
         loadError={loadError}
       />
+
+      {/* Refreshment suggestions modal */}
+      <RefreshmentModal />
 
       {!showItinerary && (
         <div className="flex items-center justify-center h-[50vh] bg-white border-t">

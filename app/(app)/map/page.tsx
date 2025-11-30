@@ -4,6 +4,8 @@ import { useLoadScript } from "@react-google-maps/api";
 import MapView from "../../components/MapView";
 import { useTripContext } from "../../context/TripContext";
 
+const LIBRARIES: ("places")[] = ["places"];
+
 const containerStyle = {
   width: "100vw",
   height: "calc(100vh - 56px)",
@@ -14,7 +16,7 @@ export default function FullMapPage() {
   const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!;
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: ["places"],
+    libraries: LIBRARIES,
   });
   const {
     origin,

@@ -13,7 +13,7 @@ interface ItineraryItem {
 interface ItineraryViewProps {
   showItinerary: boolean;
   itinerary: ItineraryItem[];
-  onSaveTrip: () => void;
+  onSaveTrip: () => Promise<any>;
   onShowMap: () => void;
   isLoaded?: boolean;
   loadError?: unknown;
@@ -41,6 +41,11 @@ export default function ItineraryView({
     originTime,
     destinationTime,
     stopTimes,
+    setShowItinerary,
+    setPendingRecalc,
+    setPendingShowAmenities,
+    setPostSaveRedirectToTrips,
+    forceShowAmenities,
   } = useTripContext();
 
   const nodes = useMemo(() => {
@@ -108,6 +113,66 @@ export default function ItineraryView({
     return [];
   }, [travelMode, directions, directionsSegments]);
 
+  // Detailed transit steps per leg (Board/Walk/Ride details)
+  const transitStepsByLeg = useMemo(() => {
+    if (travelMode !== "TRANSIT") return [];
+    return directionsSegments.map((seg) => {
+      const leg = seg.routes?.[0]?.legs?.[0];
+      const items: {
+        mode: "WALK" | "BUS";
+        label: string;
+        subtext?: string;
+        boardStop?: string;
+        boardTime?: string;
+        alightStop?: string;
+        alightTime?: string;
+      }[] = [];
+      if (!leg) return items;
+      let walkDistParts: string[] = [];
+      let walkDurSec = 0;
+      const flushWalk = () => {
+        if (!walkDistParts.length) return;
+        const mins = Math.round(walkDurSec / 60);
+        const label = `Walk • ${walkDistParts.join(" + ")} • ${mins} mins${mins > 30 ? " • Suggest Cab" : ""}`;
+        items.push({ mode: "WALK", label });
+        walkDistParts = [];
+        walkDurSec = 0;
+      };
+      (leg.steps || []).forEach((step: any) => {
+        if (step.travel_mode === google.maps.TravelMode.WALKING) {
+          const d = step.distance?.text || "";
+          walkDistParts.push(d);
+          walkDurSec += step.duration?.value || 0;
+        } else if (step.travel_mode === google.maps.TravelMode.TRANSIT) {
+          flushWalk();
+          const tr = step.transit;
+          if (!tr) return;
+          const bus = tr.line?.short_name || tr.line?.name || "Bus";
+          const d = step.distance?.text || "";
+          const t = step.duration?.text || "";
+          const boardStop = tr.departure_stop?.name;
+          const boardTime = tr.departure_time?.text;
+          const alightStop = tr.arrival_stop?.name;
+          const alightTime = tr.arrival_time?.text;
+          const subtext = [boardStop ? `Board @ ${boardStop}` : "", boardTime || ""]
+            .filter(Boolean)
+            .join(" • ");
+          items.push({
+            mode: "BUS",
+            label: `Bus ${bus} • ${d} • ${t}`,
+            subtext,
+            boardStop,
+            boardTime,
+            alightStop,
+            alightTime,
+          });
+        }
+      });
+      flushWalk();
+      return items;
+    });
+  }, [travelMode, directionsSegments]);
+
   if (!showItinerary) return null;
 
   const ModeIcon = (mode: string, label: string) => {
@@ -118,14 +183,24 @@ export default function ItineraryView({
     return <Car className="h-4 w-4 text-gray-800" />;
   };
 
-  const handlePrimarySave = async () => {
-    await onSaveTrip();
-    router.push("/my-trips");
+  const handleSave = async () => {
+    if (editingJourneyId) {
+      await updateTripHandler();
+      router.push("/my-trips");
+      return;
+    }
+    const saved = await onSaveTrip();
+    // After first save of a new plan, open amenities list in-place
+    setPostSaveRedirectToTrips(true);
+    await forceShowAmenities();
   };
-
-  const handleUpdateSave = async () => {
-    await updateTripHandler();
-    router.push("/my-trips");
+  const handleCancel = () => {
+    if (editingJourneyId) {
+      setEditingJourneyId(null);
+      router.push("/my-trips");
+    } else {
+      setShowItinerary(false);
+    }
   };
 
   return (
@@ -156,11 +231,42 @@ export default function ItineraryView({
         {/* Segments between nodes */}
         {nodes.slice(1).map((node, idx) => (
           <div key={idx} className="mb-4">
-            {/* Segment summary (transit/drive/walk) without its own border */}
-            {legItems[idx] ? (
+            {/* Segment details (prefer detailed transit steps; fallback to single summary) */}
+            {travelMode === "TRANSIT" && transitStepsByLeg[idx] && transitStepsByLeg[idx].length > 0 ? (
+              <div className="mb-2 space-y-2">
+                {transitStepsByLeg[idx].map((step, si) => (
+                  <div key={si} className="bg-white px-3 py-2">
+                    <div className="flex items-center space-x-2 text-sm text-gray-800">
+                      {ModeIcon(step.mode, step.label)}
+                      <span>{step.label}</span>
+                    </div>
+                    {step.subtext ? (
+                      <div className="text-xs text-gray-500 mt-1 ml-6">{step.subtext}</div>
+                    ) : null}
+                    {step.alightStop || step.alightTime ? (
+                      <div className="mt-2 ml-6">
+                        <div className="bg-gray-50 border p-2 rounded inline-block">
+                          <div className="flex items-center space-x-2 text-sm text-gray-800">
+                            <span className="inline-flex items-center">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" className="mr-1">
+                                <path d="M12 2C8.686 2 6 4.686 6 8c0 5 6 14 6 14s6-9 6-14c0-3.314-2.686-6-6-6zm0 8.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z" fill="#e11d48"/>
+                              </svg>
+                              <span className="font-medium">Alight @ {step.alightStop || "Stop"}</span>
+                            </span>
+                          </div>
+                          {step.alightTime ? (
+                            <div className="text-xs text-gray-500 mt-1">at {step.alightTime}</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : legItems[idx] ? (
               <div className="mb-2">
-                <div className="bg-white px-3 py-2 pl-4">
-                  <div className="flex items-center space-x-2 text-sm text-gray-800 bg-red">
+                <div className="bg-white px-3 py-2">
+                  <div className="flex items-center space-x-2 text-sm text-gray-800">
                     {ModeIcon(legItems[idx].mode as string, legItems[idx].label)}
                     <span>{legItems[idx].label}</span>
                   </div>
@@ -208,8 +314,8 @@ export default function ItineraryView({
                 )}
               </div>
             </div>
-          </div>
-        ))}
+        </div>
+      ))}
       </div>
 
       
@@ -232,32 +338,18 @@ export default function ItineraryView({
       </div>
 
       <div className="mt-6 flex justify-end space-x-3">
-        {editingJourneyId ? (
-          <>
-            <button
-              onClick={() => {
-                setEditingJourneyId(null);
-                router.push("/my-trips");
-              }}
-              className="px-4 py-2 rounded border border-gray-300 text-gray-800 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleUpdateSave}
-              className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white"
-            >
-              Save Changes
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={handlePrimarySave}
-            className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-white"
-          >
-            Save Trip
-          </button>
-        )}
+        <button
+          onClick={handleCancel}
+          className="px-4 py-2 rounded border border-gray-300 text-gray-800 hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleSave}
+          className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white"
+        >
+          Save
+        </button>
       </div>
     </div>
   );

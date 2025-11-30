@@ -1,19 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash, MapPinned } from "lucide-react";
+import { Pencil, Trash } from "lucide-react";
 import { useTripContext } from "../../context/TripContext";
-import MiniRouteMap from "../../components/MiniRouteMap";
 import { useLoadScript } from "@react-google-maps/api";
+
+const LIBRARIES: ("places")[] = ["places"];
 
 export default function MyTripsPage() {
   const router = useRouter();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string;
   const { isLoaded, loadError } = useLoadScript({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
-    libraries: ["places"],
+    libraries: LIBRARIES,
   });
   const {
     savedJourneys,
@@ -31,6 +31,8 @@ export default function MyTripsPage() {
     setShowItinerary,
     deleteTripHandler,
     setEditingJourneyId,
+    setPendingRecalc,
+    setPendingShowAmenities,
   } = useTripContext();
 
   return (
@@ -73,45 +75,46 @@ export default function MyTripsPage() {
               </button>
               <button
                 onClick={() => {
-                  setExpandedId((prev) => (prev === trip._id ? null : trip._id));
+                  // Load this trip into context and navigate to homepage; let it recalc and show itinerary
+                  setEditingJourneyId(trip._id);
+                  setOrigin(trip.start);
+                  setDestination(trip.destination);
+                  setWaypoints(trip.waypoints || []);
+                  setStopTimes(trip.stopTimes || []);
+                  setTravelMode(trip.travelMode);
+                  setFilterOption(trip.filterOption);
+                  setTripDate(new Date(trip.startTime).toISOString().split("T")[0]);
+                  setOriginTime(new Date(trip.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }));
+                  setDestinationTime(new Date(trip.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }));
+                  setPendingRecalc(true);
+                  router.push("/");
                 }}
                 className="flex items-center border border-gray-300 hover:bg-gray-50 text-gray-800 px-3 py-1 rounded"
               >
-                {expandedId === trip._id ? "Hide" : "View"}
+                View Trip
+              </button>
+              <button
+                onClick={() => {
+                  // Load trip, recalc, then open amenities automatically
+                  setEditingJourneyId(trip._id);
+                  setOrigin(trip.start);
+                  setDestination(trip.destination);
+                  setWaypoints(trip.waypoints || []);
+                  setStopTimes(trip.stopTimes || []);
+                  setTravelMode(trip.travelMode);
+                  setFilterOption(trip.filterOption);
+                  setTripDate(new Date(trip.startTime).toISOString().split("T")[0]);
+                  setOriginTime(new Date(trip.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }));
+                  setDestinationTime(new Date(trip.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }));
+                  setPendingShowAmenities(true);
+                  setPendingRecalc(true);
+                  router.push("/");
+                }}
+                className="flex items-center border border-gray-300 hover:bg-gray-50 text-gray-800 px-3 py-1 rounded"
+              >
+                See Amenities
               </button>
             </div>
-            {expandedId === trip._id && (
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <MiniRouteMap
-                  start={trip.start}
-                  destination={trip.destination}
-                  waypoints={trip.waypoints || []}
-                  travelMode={trip.travelMode}
-                  width="100%"
-                  height={220}
-                  isLoaded={isLoaded}
-                  loadError={loadError}
-                  beforeNavigate={() => {
-                    setOrigin(trip.start);
-                    setDestination(trip.destination);
-                    setWaypoints(trip.waypoints || []);
-                    setStopTimes(trip.stopTimes || []);
-                    setTravelMode(trip.travelMode);
-                    setFilterOption(trip.filterOption);
-                    setTripDate(new Date(trip.startTime).toISOString().split("T")[0]);
-                    setOriginTime(new Date(trip.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }));
-                    setDestinationTime(new Date(trip.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }));
-                    setShowItinerary(false);
-                  }}
-                />
-                <div className="bg-white border rounded p-3">
-                  <div className="text-sm text-gray-500 mb-1">Itinerary</div>
-                  <pre className="text-sm text-gray-800 whitespace-pre-wrap">
-                    {trip.itinerary}
-                  </pre>
-                </div>
-              </div>
-            )}
           </div>
         ))
       )}

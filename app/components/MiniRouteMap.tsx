@@ -40,29 +40,31 @@ export default function MiniRouteMap({
   useEffect(() => {
     if (!isLoaded || !start || !destination) return;
     const svc = new google.maps.DirectionsService();
-    svc.route(
-      {
-        origin: start,
-        destination,
-        travelMode,
-        waypoints: (waypoints || []).filter(Boolean).map((w) => ({ location: w })),
-        ...(travelMode === "TRANSIT"
-          ? {
-              transitOptions: {
-                modes: [google.maps.TransitMode.BUS],
-                routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-              },
-            }
-          : {}),
-      },
-      (res, status) => {
-        if (status === "OK" && res) {
-          setDirections(res);
-        } else {
-          setDirections(null);
-        }
+    const baseRequest: google.maps.DirectionsRequest = {
+      origin: start,
+      destination,
+      travelMode,
+    };
+    const request: google.maps.DirectionsRequest =
+      travelMode === google.maps.TravelMode.TRANSIT
+        ? {
+            ...baseRequest,
+            transitOptions: {
+              modes: [google.maps.TransitMode.BUS],
+              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
+            },
+          }
+        : {
+            ...baseRequest,
+            waypoints: (waypoints || []).filter(Boolean).map((w) => ({ location: w })),
+          };
+    svc.route(request, (res, status) => {
+      if (status === "OK" && res) {
+        setDirections(res);
+      } else {
+        setDirections(null);
       }
-    );
+    });
   }, [isLoaded, start, destination, waypoints, travelMode]);
 
   // Rough default center for Goa to avoid blank map before directions load
