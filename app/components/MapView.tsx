@@ -32,10 +32,9 @@ export default function MapView({ showItinerary, containerStyle, defaultCenter, 
                 options={{ suppressMarkers: false, preserveViewport: false }}
               />
             )}
-        {travelMode !== "TRANSIT" &&
-          extraMarkers.map((marker, idx) => (
-            <Marker key={idx} position={marker.position} icon={icon} />
-          ))}
+        {extraMarkers.map((marker, idx) => (
+          <Marker key={idx} position={marker.position} icon={icon} />
+        ))}
       </GoogleMap>
     </div>
   );

@@ -53,6 +53,16 @@ export default function ItineraryView({
     return points;
   }, [origin, waypoints, destination]);
 
+  const noTransitFound = useMemo(() => {
+    if (travelMode !== "TRANSIT") return false;
+    if (!directionsSegments || directionsSegments.length === 0) return true;
+    return !directionsSegments.some((seg) =>
+      (seg.routes?.[0]?.legs?.[0]?.steps || []).some(
+        (s: any) => s.travel_mode === google.maps.TravelMode.TRANSIT
+      )
+    );
+  }, [travelMode, directionsSegments]);
+
   const legItems = useMemo(() => {
     if (travelMode === "TRANSIT") {
       // One summary per segment (between nodes)
@@ -228,6 +238,26 @@ export default function ItineraryView({
           </div>
         </div>
        
+      {/* Show any external bus route suggestions from itinerary items (e.g., OSM bus route) */}
+      {itinerary.filter(item => item.title.startsWith("🚌")).map((item, idx) => (
+        <div key={`osm-${idx}`} className="mb-4">
+          <div className="bg-blue-50 border border-blue-200 text-blue-800 px-3 py-2 rounded">
+            <div className="font-semibold">{item.title}</div>
+            {item.description && (
+              <div className="text-sm mt-1">{item.description}</div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {travelMode === "TRANSIT" && noTransitFound ? (
+        <div className="mb-4">
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-3 py-2 rounded">
+            No transit found for the selected time. Showing walking between points.
+          </div>
+        </div>
+      ) : null}
+
         {/* Segments between nodes */}
         {nodes.slice(1).map((node, idx) => (
           <div key={idx} className="mb-4">

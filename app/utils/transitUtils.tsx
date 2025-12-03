@@ -37,7 +37,7 @@ export async function getTransitItinerary(
             transitOptions: {
               routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
               ...(opts?.departAt ? { departureTime: opts.departAt } : {}),
-              ...(opts?.arriveBy ? { arrivalTime: opts.arriveBy } : {}),
+              ...(opts?.arriveBy && !opts?.departAt ? { arrivalTime: opts.arriveBy } : {}),
             },
           },
           (r2, s2) => {

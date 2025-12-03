@@ -395,305 +395,260 @@ export function TripProvider({ children }: { children: ReactNode }) {
     const stops = waypoints.filter((w) => w.trim());
     if (travelMode === "TRANSIT") {
       try {
-        const departureDate = new Date(`${tripDate}T${originTime}:00`);
-        const arrivalDate = new Date(`${tripDate}T${destinationTime}:00`);
-        // Prefer WHOLE-TRIP transit first to avoid fragmented walking
-        const tryWholeTripVariants = async (): Promise<google.maps.DirectionsResult | null> => {
-          const variants: Array<google.maps.DirectionsRequest> = [];
-          variants.push({
-            origin,
-            destination,
-            travelMode: google.maps.TravelMode.TRANSIT,
-            transitOptions: {
-              modes: [google.maps.TransitMode.BUS],
-              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-              departureTime: departureDate,
-            },
-          });
-          variants.push({
-            origin,
-            destination,
-            travelMode: google.maps.TravelMode.TRANSIT,
-            transitOptions: {
-              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-              departureTime: departureDate,
-            },
-          });
-          variants.push({
-            origin,
-            destination,
-            travelMode: google.maps.TravelMode.TRANSIT,
-            transitOptions: {
-              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-            },
-          });
-          if (!Number.isNaN(arrivalDate.getTime())) {
-            variants.push({
-              origin,
-              destination,
-              travelMode: google.maps.TravelMode.TRANSIT,
-              transitOptions: {
-                routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-                arrivalTime: arrivalDate,
-              },
+        // Parse departure time - use current time if not specified
+        let departureDate: Date;
+        if (originTime) {
+          departureDate = new Date(`${tripDate}T${originTime}:00`);
+        } else {
+          departureDate = new Date();
+        }
+        console.log("[TRANSIT] Starting route search, departure:", departureDate.toISOString());
+        
+        const transitPreference =
+          filterOption === "FEWER_TRANSFERS"
+            ? google.maps.TransitRoutePreference.FEWER_TRANSFERS
+            : google.maps.TransitRoutePreference.LESS_WALKING;
+
+        // South Goa hubs for fallback routing - ordered by likelihood of success
+        const HUBS = [
+          "Colva Circle, Goa",           // Closest to Colva Beach
+          "Majorda Bus Stand, Goa",      // Close to Majorda Beach area
+          "Margao Kadamba Bus Stand, Goa", // Major transit hub
+          "Verna Industrial Estate Bus Stop, Goa",
+          "Cortalim Bus Stand, Goa",
+        ];
+        
+        const MAX_WALK_DISTANCE_M = 6500; // 6.5km max walking - allows Majorda (5119m) and Colva Circle (6420m) to Colva Beach
+        
+        // Helper: make a directions request with timeout
+        const routeRequest = (req: google.maps.DirectionsRequest): Promise<google.maps.DirectionsResult | null> =>
+          new Promise((resolve) => {
+            const timer = setTimeout(() => resolve(null), 10000);
+            svc.route(req, (res, status) => {
+              clearTimeout(timer);
+              if (status === google.maps.DirectionsStatus.OK && res) {
+                resolve(res);
+              } else {
+                console.log(`[routeRequest] status: ${status}`);
+                resolve(null);
+              }
             });
-          }
-          const plus30 = new Date(departureDate.getTime() + 30 * 60 * 1000);
-          const plus60 = new Date(departureDate.getTime() + 60 * 60 * 1000);
-          variants.push({
-            origin,
-            destination,
-            travelMode: google.maps.TravelMode.TRANSIT,
-            transitOptions: {
-              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-              departureTime: plus30,
-            },
           });
-          variants.push({
-            origin,
-            destination,
-            travelMode: google.maps.TravelMode.TRANSIT,
-            transitOptions: {
-              routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-              departureTime: plus60,
-            },
-          });
-          for (const req of variants) {
-            // eslint-disable-next-line no-await-in-loop
-            const result = await new Promise<google.maps.DirectionsResult | null>((resolve) => {
-              svc.route(req, (whole, status) => {
-                if (status === google.maps.DirectionsStatus.OK && whole) resolve(whole);
-                else resolve(null);
-              });
-            });
-            if (result) return result;
-          }
-          return null;
-        };
-        const whole = await tryWholeTripVariants();
-        const wholeHasTransit =
-          !!whole &&
-          (whole.routes?.[0]?.legs?.[0]?.steps || []).some(
-            (st: any) => st.travel_mode === google.maps.TravelMode.TRANSIT
+        
+        // Helper: check if a result has transit legs
+        const hasTransitLeg = (r: google.maps.DirectionsResult | null): boolean => {
+          if (!r) return false;
+          const steps = r.routes?.[0]?.legs?.[0]?.steps || [];
+          return steps.some((st: any) => 
+            st.travel_mode === google.maps.TravelMode.TRANSIT || 
+            st.travel_mode === "TRANSIT"
           );
-        if (whole && wholeHasTransit) {
-          if (setDirectionsSegmentsOverride) {
-            setDirectionsSegmentsOverride([whole]);
-          } else {
-            setDirectionsSegments([whole]);
-          }
-          // Minimal text; UI renders details from directionsSegments
+        };
+        
+        // Helper: get walking distance from a DirectionsResult
+        const getWalkDistance = (r: google.maps.DirectionsResult | null): number => {
+          if (!r) return Infinity;
+          return r.routes?.[0]?.legs?.[0]?.distance?.value || Infinity;
+        };
+        
+        // Helper: get duration from a DirectionsResult
+        const getDuration = (r: google.maps.DirectionsResult | null): number => {
+          if (!r) return 0;
+          return r.routes?.[0]?.legs?.[0]?.duration?.value || 0;
+        };
+
+        // ===========================================
+        // STEP 1: Try direct origin -> destination transit
+        // ===========================================
+        console.log("[TRANSIT] Step 1: Trying direct route...");
+        const directTransit = await routeRequest({
+            origin,
+            destination,
+            travelMode: google.maps.TravelMode.TRANSIT,
+            transitOptions: {
+            routingPreference: transitPreference,
+            departureTime: departureDate,
+            },
+          });
+        
+        if (directTransit && hasTransitLeg(directTransit)) {
+          console.log("[TRANSIT] Step 1: Direct route found with transit!");
+          if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride([directTransit]);
+          else setDirectionsSegments([directTransit]);
           setItinerary([{ title: origin, description: "" }, { title: destination, description: "" }]);
           setSegmentInfos([]);
           setShowItinerary(true);
           setTimeout(() => setShowModal(false), 0);
           return;
         }
-        // Fallback 2: Try via known South Goa hubs (helps Colva/Majorda/Margao routes)
-        const tryHubChain = async (hub: string): Promise<google.maps.DirectionsResult[] | null> => {
-          const legReq = (a: string, b: string, dep: Date) =>
-            new Promise<google.maps.DirectionsResult | null>((resolve) => {
-              svc.route(
-                {
-                  origin: a,
-                  destination: b,
+        console.log("[TRANSIT] Step 1: No direct transit route found.");
+
+        // ===========================================
+        // FALLBACK A: Origin -> Hub (transit), Hub -> Destination (walk if <=5km)
+        // ===========================================
+        console.log("[TRANSIT] Fallback A: Trying origin -> hub -> destination...");
+        
+        for (const hub of HUBS) {
+          console.log(`[TRANSIT] Trying hub: ${hub}`);
+          
+          // Try transit from origin to hub FIRST (don't pre-filter by distance)
+          const originToHub = await routeRequest({
+            origin,
+            destination: hub,
                   travelMode: google.maps.TravelMode.TRANSIT,
                   transitOptions: {
-                    routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-                    departureTime: dep,
-                  },
-                },
-                (res, status) => {
-                  if (status === google.maps.DirectionsStatus.OK && res) resolve(res);
-                  else resolve(null);
-                }
-              );
-            });
-          const first = await legReq(origin, hub, departureDate);
-          if (!first) return null;
-          // chain second with last arrival time as departure if present
-          let nextDep = departureDate;
-          try {
-            const leg = (first.routes?.[0]?.legs?.[0] as any) || null;
-            const arrVal = leg?.arrival_time?.value;
-            if (arrVal) nextDep = arrVal instanceof Date ? arrVal : new Date(arrVal);
-          } catch {}
-          const second = await legReq(hub, destination, nextDep);
-          if (!second) return null;
-          const hasTransit =
-            (first.routes?.[0]?.legs?.[0]?.steps || []).some((st: any) => st.travel_mode === google.maps.TravelMode.TRANSIT) ||
-            (second.routes?.[0]?.legs?.[0]?.steps || []).some((st: any) => st.travel_mode === google.maps.TravelMode.TRANSIT);
-          return hasTransit ? [first, second] : null;
-        };
-        const southGoaHubs = ["Margao Kadamba Bus Stand, Goa", "Majorda Bus Stand, Goa"];
-        for (const hub of southGoaHubs) {
-          // eslint-disable-next-line no-await-in-loop
-          const chain = await tryHubChain(hub);
-          if (chain) {
-            if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(chain);
-            else setDirectionsSegments(chain);
-            setItinerary([{ title: origin, description: "" }, { title: hub, description: "" }, { title: destination, description: "" }]);
+              routingPreference: transitPreference,
+              departureTime: departureDate,
+            },
+          });
+          
+          if (!originToHub || !hasTransitLeg(originToHub)) {
+            console.log(`[TRANSIT] No transit from origin to hub ${hub}`);
+            continue;
+          }
+          console.log(`[TRANSIT] Found transit from origin to hub ${hub}!`);
+          
+          // Get walking route from hub to destination
+          const hubToDest = await routeRequest({
+            origin: hub,
+            destination,
+            travelMode: google.maps.TravelMode.WALKING,
+          });
+          
+          if (!hubToDest) {
+            console.log(`[TRANSIT] Could not get walking route from hub to destination`);
+            continue;
+          }
+          
+          const walkDist = getWalkDistance(hubToDest);
+          console.log(`[TRANSIT] Walking distance from hub to destination: ${walkDist}m`);
+          
+          if (walkDist <= MAX_WALK_DISTANCE_M) {
+            // SUCCESS: origin -> hub (transit) + hub -> destination (walk)
+            console.log(`[TRANSIT] SUCCESS: Found route via ${hub}!`);
+            const segments = [originToHub, hubToDest];
+            if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(segments);
+            else setDirectionsSegments(segments);
+            setItinerary([
+              { title: origin, description: "" },
+              { title: hub, description: `Walk ${Math.round(walkDist)}m to destination` },
+              { title: destination, description: "" },
+            ]);
             setSegmentInfos([]);
             setShowItinerary(true);
             setTimeout(() => setShowModal(false), 0);
             return;
+          } else {
+            console.log(`[TRANSIT] Walk distance ${walkDist}m exceeds max ${MAX_WALK_DISTANCE_M}m`);
           }
         }
-        // Fallback 3: Find nearest bus stop to destination and chain via that stop
-        const geocoder = new maps.Geocoder();
-        const geocodeDest = await new Promise<google.maps.GeocoderResult | null>((resolve) => {
-          geocoder.geocode({ address: destination }, (results, status) => {
-            if (status === "OK" && results && results[0]) resolve(results[0]);
-            else resolve(null);
+        console.log("[TRANSIT] Fallback A: No suitable hub found.");
+
+        // ===========================================
+        // FALLBACK B: Origin -> Hub (walk if <=5km), Hub -> Destination (transit)
+        // ===========================================
+        console.log("[TRANSIT] Fallback B: Trying origin (walk) -> hub -> destination (transit)...");
+        
+        for (const hub of HUBS) {
+          console.log(`[TRANSIT] Trying hub: ${hub}`);
+          
+          // Get walking route from origin to hub
+          const originToHub = await routeRequest({
+            origin,
+            destination: hub,
+            travelMode: google.maps.TravelMode.WALKING,
           });
-        });
-        if (geocodeDest) {
-          const dloc = geocodeDest.geometry?.location;
-          const dlat = dloc?.lat();
-          const dlng = dloc?.lng();
-          if (typeof dlat === "number" && typeof dlng === "number") {
-            try {
-              const resp = await fetch(`/api/amenities?lat=${encodeURIComponent(dlat)}&lng=${encodeURIComponent(dlng)}&radius=2000&types=bus`);
-              if (resp.ok) {
-                const data = await resp.json();
-                const stops = (data.results || []) as Array<{ name: string; location: { lat: number; lng: number } }>;
-                // choose nearest by distance
-                let best: any = null;
-                let bestd = Number.POSITIVE_INFINITY;
-                for (const s of stops) {
-                  const dy = (s.location.lat - dlat) * 111_000;
-                  const dx = (s.location.lng - dlng) * 111_000 * Math.cos((dlat * Math.PI) / 180);
-                  const dist = Math.sqrt(dx * dx + dy * dy);
-                  if (dist < bestd) {
-                    bestd = dist;
-                    best = s;
-                  }
-                }
-                if (best) {
-                  const stopLatLng = new maps.LatLng(best.location.lat, best.location.lng);
-                  // chain origin -> stop (TRANSIT) -> destination (WALK)
-                  const legTransit = (a: string | google.maps.LatLng, b: string | google.maps.LatLng, dep: Date) =>
-                    new Promise<google.maps.DirectionsResult | null>((resolve) => {
-                      svc.route(
-                        {
-                          origin: a,
-                          destination: b,
+          
+          if (!originToHub) {
+            console.log(`[TRANSIT] Could not get walking route from origin to hub`);
+            continue;
+          }
+          
+          const walkDist = getWalkDistance(originToHub);
+          const walkDuration = getDuration(originToHub);
+          console.log(`[TRANSIT] Walking distance origin to hub: ${walkDist}m, duration: ${walkDuration}s`);
+          
+          if (walkDist > MAX_WALK_DISTANCE_M) {
+            console.log(`[TRANSIT] Walking distance ${walkDist}m exceeds max ${MAX_WALK_DISTANCE_M}m, skipping`);
+            continue;
+          }
+          
+          // Calculate new departure time after walking
+          const transitDepartureTime = new Date(departureDate.getTime() + walkDuration * 1000);
+          console.log(`[TRANSIT] Transit departure time after walk: ${transitDepartureTime.toISOString()}`);
+          
+          // Try transit from hub to destination
+          const hubToDest = await routeRequest({
+            origin: hub,
+            destination,
                           travelMode: google.maps.TravelMode.TRANSIT,
                           transitOptions: {
-                            routingPreference: google.maps.TransitRoutePreference.LESS_WALKING,
-                            departureTime: dep,
-                          },
-                        },
-                        (res, status) => {
-                          if (status === google.maps.DirectionsStatus.OK && res) resolve(res);
-                          else resolve(null);
-                        }
-                      );
-                    });
-                  const legWalk = (a: string | google.maps.LatLng, b: string | google.maps.LatLng) =>
-                    new Promise<google.maps.DirectionsResult | null>((resolve) => {
-                      svc.route(
-                        {
-                          origin: a,
-                          destination: b,
-                          travelMode: google.maps.TravelMode.WALKING,
-                        },
-                        (res, status) => {
-                          if (status === google.maps.DirectionsStatus.OK && res) resolve(res);
-                          else resolve(null);
-                        }
-                      );
-                    });
-                  const first = await legTransit(origin, stopLatLng, departureDate);
-                  if (first) {
-                    let nextDep = departureDate;
-                    try {
-                      const leg = (first.routes?.[0]?.legs?.[0] as any) || null;
-                      const arrVal = leg?.arrival_time?.value;
-                      if (arrVal) nextDep = arrVal instanceof Date ? arrVal : new Date(arrVal);
-                    } catch {}
-                    const walk2 = await legWalk(stopLatLng, destination);
-                    if (walk2) {
-                      const chain = [first, walk2];
-                      if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(chain);
-                      else setDirectionsSegments(chain);
-                      setItinerary([{ title: origin, description: "" }, { title: best.name || "Bus Stop", description: "" }, { title: destination, description: "" }]);
+              routingPreference: transitPreference,
+              departureTime: transitDepartureTime,
+            },
+          });
+          
+          if (!hubToDest || !hasTransitLeg(hubToDest)) {
+            console.log(`[TRANSIT] No transit from hub ${hub} to destination`);
+            continue;
+          }
+          
+          // SUCCESS: origin -> hub (walk) + hub -> destination (transit)
+          console.log(`[TRANSIT] SUCCESS: Found route via ${hub}!`);
+          const segments = [originToHub, hubToDest];
+          if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(segments);
+          else setDirectionsSegments(segments);
+          setItinerary([
+            { title: origin, description: `Walk ${Math.round(walkDist)}m to ${hub}` },
+            { title: hub, description: "" },
+            { title: destination, description: "" },
+          ]);
                       setSegmentInfos([]);
                       setShowItinerary(true);
                       setTimeout(() => setShowModal(false), 0);
                       return;
                     }
-                  }
-                }
-              }
-            } catch {
-              // ignore bus stop fallback errors
-            }
-          }
-        }
-        // Fallback to slice-by-slice transit if whole-trip failed
-        const { itinerary: raw, segmentInfos, directionsSegments: transitSegs } =
-          await getTransitItinerary(
-            [origin, ...stops, destination],
-            svc,
+        console.log("[TRANSIT] Fallback B: No suitable hub found.");
+
+        // ===========================================
+        // NO TRANSIT FOUND - Show walking route as fallback
+        // ===========================================
+        console.log("[TRANSIT] No transit routes found. Showing walking fallback.");
+        
+        const walkingRoute = await routeRequest({
             origin,
-            departureDate,
             destination,
-            arrivalDate,
-            waypoints,
-            stopTimes
-          );
-        const normalized = raw.map((r: any) => ({
-          title: r.title,
-          description: r.description ?? "",
-        }));
-        // Detect if no transit was found across all segments; if so, try whole-trip transit once more (already tried above),
-        // otherwise render the slice result.
-        const noTransitAcross = transitSegs.length > 0
-          ? !transitSegs.some((seg) =>
-              (seg.routes?.[0]?.legs?.[0]?.steps || []).some(
-                (st: any) => st.travel_mode === google.maps.TravelMode.TRANSIT
-              )
-            )
-          : true;
-        if (noTransitAcross) {
-          const whole = await tryWholeTripVariants();
-          if (whole) {
-            if (setDirectionsSegmentsOverride) {
-              setDirectionsSegmentsOverride([whole]);
-            } else {
-              setDirectionsSegments([whole]);
-            }
-            // keep itinerary text minimal; UI renders details from directionsSegments
-            setItinerary(
-              normalized.length
-                ? normalized
-                : [{ title: origin, description: "" }, { title: destination, description: "" }]
-            );
-            setSegmentInfos(segmentInfos);
-          } else {
-            if (setDirectionsSegmentsOverride) {
-              setDirectionsSegmentsOverride(transitSegs);
-            } else {
-              setDirectionsSegments(transitSegs);
-            }
-            setItinerary(normalized);
-            setSegmentInfos(segmentInfos);
-          }
+          travelMode: google.maps.TravelMode.WALKING,
+        });
+        
+        if (walkingRoute) {
+          if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride([walkingRoute]);
+          else setDirectionsSegments([walkingRoute]);
         } else {
-        setItinerary(normalized);
-        setSegmentInfos(segmentInfos);
-        if (setDirectionsSegmentsOverride) {
-            setDirectionsSegmentsOverride(transitSegs);
-        } else {
-            setDirectionsSegments(transitSegs);
-          }
+          if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride([]);
+          else setDirectionsSegments([]);
         }
+        
+        setItinerary([
+          { title: origin, description: "No transit routes found" },
+          { title: destination, description: "Showing walking route" },
+        ]);
+        setSegmentInfos([]);
         setShowItinerary(true);
         setTimeout(() => setShowModal(false), 0);
+        
       } catch (err) {
-        console.error(err);
-        alert("Transit error: " + err);
+        console.error("[TRANSIT] Error:", err);
+        // Render minimal itinerary on error
+        if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride([]);
+        else setDirectionsSegments([]);
+        setItinerary([
+          { title: origin, description: "" },
+          { title: destination, description: "" },
+        ]);
+        setSegmentInfos([]);
+        setShowItinerary(true);
+        setTimeout(() => setShowModal(false), 0);
       }
     } else {
       svc.route(

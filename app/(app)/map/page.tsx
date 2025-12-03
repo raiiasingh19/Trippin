@@ -1,8 +1,7 @@
 "use client";
-import React, { FormEvent, useEffect } from "react";
+import React from "react";
 import { useLoadScript } from "@react-google-maps/api";
 import MapView from "../../components/MapView";
-import { useTripContext } from "../../context/TripContext";
 
 const LIBRARIES: ("places")[] = ["places"];
 
@@ -18,22 +17,9 @@ export default function FullMapPage() {
     googleMapsApiKey: GOOGLE_MAPS_API_KEY,
     libraries: LIBRARIES,
   });
-  const {
-    origin,
-    destination,
-    getDirectionsHandler,
-    setDirections,
-    setDirectionsSegments,
-    setExtraMarkers,
-  } = useTripContext();
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!origin || !destination) return;
-    const dummy = { preventDefault: () => {} } as unknown as FormEvent;
-    getDirectionsHandler(dummy, window.google.maps, setDirections, setDirectionsSegments, setExtraMarkers)
-      .catch((e) => console.error("Full map route calc error:", e));
-  }, [isLoaded, origin, destination, getDirectionsHandler, setDirections, setDirectionsSegments, setExtraMarkers]);
+  // Directions are already calculated in TripContext - MapView reads them directly
+  // No need to recalculate here, just display
 
   const userStopIcon = "";
 

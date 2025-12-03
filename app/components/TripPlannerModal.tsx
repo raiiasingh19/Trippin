@@ -110,12 +110,15 @@ export default function TripPlannerModal({
               onLoad={(auto) => (originRef.current = auto)}
               onPlaceChanged={() => {
                 const place = originRef.current?.getPlace();
-                setOrigin(place?.formatted_address || "");
+                if (place?.formatted_address) {
+                  setOrigin(place.formatted_address);
+                }
               }}
             >
               <input
                 type="text"
-                defaultValue={origin}
+                value={origin}
+                onChange={(e) => setOrigin(e.target.value)}
                 placeholder="Enter origin"
                 className="w-full px-2 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-gray-700"
               />
@@ -196,12 +199,16 @@ export default function TripPlannerModal({
               onLoad={(auto) => (destinationRef.current = auto)}
               onPlaceChanged={() => {
                 const place = destinationRef.current?.getPlace();
-                setDestination(place?.formatted_address || "");
+                if (place?.formatted_address) {
+                  setDestination(place.formatted_address);
+                }
               }}
             >
               <input
                 type="text"
-                ref={destinationInputRef} // ✅ this is new
+                ref={destinationInputRef}
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
                 placeholder="Enter destination"
                 className="w-full px-2 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-gray-700"
               />
