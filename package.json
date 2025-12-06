@@ -6,7 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:amenities": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed-amenities.ts",
+    "scrape:goa-tourism": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/scrape-goa-tourism.ts",
+    "scrape:goa-tourism-v2": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/scrape-goa-tourism-v2.ts"
   },
   "dependencies": {
     "@next/env": "^15.1.6",
@@ -29,10 +32,13 @@
     "@types/node": "^20.17.48",
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19",
+    "cheerio": "^1.1.2",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "15.1.6",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5"
   }
 }

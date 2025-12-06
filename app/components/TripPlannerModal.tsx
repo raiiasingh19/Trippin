@@ -38,6 +38,7 @@ interface TripPlannerModalProps {
   filterOption: string;
   setFilterOption: (option: string) => void;
   onGetDirections: (e: FormEvent) => void;
+  isEditing?: boolean;
 }
 
 
@@ -65,14 +66,19 @@ export default function TripPlannerModal({
   filterOption,
   setFilterOption,
   onGetDirections,
+  isEditing = false,
 }: TripPlannerModalProps) {
   // All hooks must be at the top, before any return
   const router = useRouter();
-  const { showItinerary } = useTripContext();
+  const { showItinerary, editingJourneyId } = useTripContext();
   const originRef = useRef<google.maps.places.Autocomplete | null>(null);
   const destinationRef = useRef<google.maps.places.Autocomplete | null>(null);
   const waypointRefs = useRef<(google.maps.places.Autocomplete | null)[]>([]);
+  const waypointInputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const destinationInputRef = useRef<HTMLInputElement | null>(null);
+  
+  // Determine if we're in editing mode (from prop or context)
+  const inEditMode = isEditing || !!editingJourneyId;
 
   useEffect(() => {
     if (showItinerary) {
@@ -86,12 +92,21 @@ export default function TripPlannerModal({
     }
   }, [destination]);
 
+  // Sync waypoint input values when waypoints change (e.g., when editing a trip)
+  useEffect(() => {
+    waypoints.forEach((wp, idx) => {
+      if (waypointInputRefs.current[idx]) {
+        waypointInputRefs.current[idx]!.value = wp;
+      }
+    });
+  }, [waypoints]);
+
   if (!showModal) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="bg-white text-black rounded shadow-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">Plan Your Trip</h2>
+        <h2 className="text-xl font-bold mb-4">{inEditMode ? "Edit Trip" : "Plan Your Trip"}</h2>
         <form onSubmit={onGetDirections} className="space-y-4">
           {/* Date */}
           <div>
@@ -142,7 +157,7 @@ export default function TripPlannerModal({
           </button>
 
           {/* Dynamic Stops */}
-          {waypoints.map((_, idx) => (
+          {waypoints.map((wp, idx) => (
             <div key={idx} className="border p-2 rounded space-y-2">
               <label className="block font-medium mb-1">{`Stop ${idx + 1}`}</label>
               <Autocomplete
@@ -154,6 +169,9 @@ export default function TripPlannerModal({
               >
                 <input
                   type="text"
+                  ref={(el) => (waypointInputRefs.current[idx] = el)}
+                  defaultValue={wp}
+                  onChange={(e) => onUpdateStop(idx, e.target.value)}
                   placeholder={`Enter stop ${idx + 1}`}
                   className="w-full px-2 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-gray-700"
                 />
@@ -270,7 +288,7 @@ export default function TripPlannerModal({
             <button
               type="button"
               onClick={onClose}
-              className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-white"
+              className="bg-gray-500 hover:bg-gray-600 px-4 py-2 rounded text-white"
             >
               Cancel
             </button>
@@ -278,7 +296,7 @@ export default function TripPlannerModal({
               type="submit"
               className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-white"
             >
-              Start Trippin
+              {inEditMode ? "Save" : "Start Trippin"}
             </button>
           </div>
         </form>

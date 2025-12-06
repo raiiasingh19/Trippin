@@ -58,7 +58,7 @@ export default function ItineraryView({
     if (!directionsSegments || directionsSegments.length === 0) return true;
     return !directionsSegments.some((seg) =>
       (seg.routes?.[0]?.legs?.[0]?.steps || []).some(
-        (s: any) => s.travel_mode === google.maps.TravelMode.TRANSIT
+        (s: any) => s.travel_mode === google.maps.TravelMode.TRANSIT || s.travel_mode === "TRANSIT"
       )
     );
   }, [travelMode, directionsSegments]);
@@ -70,14 +70,14 @@ export default function ItineraryView({
         const leg = seg.routes?.[0]?.legs?.[0];
         if (!leg) return { mode: "WALK" as const, label: "Walk", subtext: "" };
         const hasTransit = (leg.steps || []).some(
-          (s) => s.travel_mode === google.maps.TravelMode.TRANSIT
+          (s: any) => s.travel_mode === google.maps.TravelMode.TRANSIT || s.travel_mode === "TRANSIT"
         );
         const d = leg.distance?.text || "";
         const t = leg.duration?.text || "";
         let subtext = "";
         // Try to find a boarding time from the first transit step
         const firstTransit = (leg.steps || []).find(
-          (s) => s.travel_mode === google.maps.TravelMode.TRANSIT
+          (s: any) => s.travel_mode === google.maps.TravelMode.TRANSIT || s.travel_mode === "TRANSIT"
         ) as google.maps.DirectionsStep | undefined;
         // @ts-ignore
         const tr = firstTransit?.transit;
@@ -93,7 +93,7 @@ export default function ItineraryView({
           // Choose a representative bus label if present
           let busLabel = "Bus";
           for (const step of leg.steps || []) {
-            if (step.travel_mode === google.maps.TravelMode.TRANSIT) {
+            if (step.travel_mode === google.maps.TravelMode.TRANSIT || (step as any).travel_mode === "TRANSIT") {
               // @ts-ignore
               const tr = step.transit;
               const bus = tr?.line?.short_name || tr?.line?.name || "Bus";
@@ -149,11 +149,11 @@ export default function ItineraryView({
         walkDurSec = 0;
       };
       (leg.steps || []).forEach((step: any) => {
-        if (step.travel_mode === google.maps.TravelMode.WALKING) {
+        if (step.travel_mode === google.maps.TravelMode.WALKING || step.travel_mode === "WALKING") {
           const d = step.distance?.text || "";
           walkDistParts.push(d);
           walkDurSec += step.duration?.value || 0;
-        } else if (step.travel_mode === google.maps.TravelMode.TRANSIT) {
+        } else if (step.travel_mode === google.maps.TravelMode.TRANSIT || step.travel_mode === "TRANSIT") {
           flushWalk();
           const tr = step.transit;
           if (!tr) return;

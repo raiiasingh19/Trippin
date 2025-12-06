@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
+import connectMongo from "@/lib/mongodb";
+import GoaAmenity from "@/models/GoaAmenity";
+
+// Disable Next.js caching for this route - always fetch fresh data
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 // GET /api/amenities?lat=..&lng=..&radius=..&types=comma,separated
-// Uses Overpass API (OpenStreetMap) plus optional OpenTripMap to find refreshment-friendly amenities:
-// - toilets, drinking water, benches, shelters, fountains
-// - parks, gardens, playgrounds, picnic sites, beaches
-// - fast_food, cafes, restaurants, pubs, bars, food courts, ice cream
-// - stores: convenience, supermarket, bakery, butcher, greengrocer, deli, kiosk, confectionery, pastry
-// - approximate "food carts/trucks" via fast_food + takeaway/outdoor_seating/mobile heuristics and kiosks
+// Uses 3 sources:
+// 1. Local Goa database (FREE) - curated hyper-local data
+// 2. Overpass API (FREE) - OpenStreetMap public amenities
+// 3. Google Places (PAID) - commercial establishments with photos/reviews
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -20,7 +24,84 @@ export async function GET(req: NextRequest) {
     const userTypes = typesParam ? typesParam.split(",").map((t) => t.trim()).filter(Boolean) : [];
     const wantBus = userTypes.some((t) => ["bus", "bus_stop", "bus_station", "transit"].includes(t));
 
-    // Build a broader Overpass query: nwr (node/way/relation) and out center to centerize areas/relations.
+    // ============================================
+    // SOURCE 1: Local Goa Database (FREE, curated)
+    // ============================================
+    async function fetchGoaLocal() {
+      try {
+        await connectMongo();
+        
+        // Convert radius from meters to approximate degrees (use wider search for local data)
+        // Use at least 5km radius for local data to ensure we find results
+        const searchRadiusM = Math.max(radius, 5000);
+        const radiusDegrees = searchRadiusM / 111000;
+        
+        // First try: find with isActive filter
+        let docs = await GoaAmenity.find({
+          isActive: true,
+          "location.lat": { $gte: lat - radiusDegrees, $lte: lat + radiusDegrees },
+          "location.lng": { $gte: lng - radiusDegrees, $lte: lng + radiusDegrees },
+        }).limit(100).lean();
+
+        // Fallback: if no results, try without isActive filter (for newly seeded data)
+        if (!docs || docs.length === 0) {
+          docs = await GoaAmenity.find({
+            "location.lat": { $gte: lat - radiusDegrees, $lte: lat + radiusDegrees },
+            "location.lng": { $gte: lng - radiusDegrees, $lte: lng + radiusDegrees },
+          }).limit(100).lean();
+        }
+
+        // Second fallback: if still no results, get any Goa amenities (user might be browsing from far)
+        if (!docs || docs.length === 0) {
+          docs = await GoaAmenity.find({}).limit(50).lean();
+        }
+
+        console.log(`[fetchGoaLocal] Found ${docs?.length || 0} local amenities near ${lat},${lng}`);
+
+        // Filter by actual distance (use original radius) and transform
+        return (docs || [])
+          .map((doc: any) => {
+            const dLat = doc.location?.lat - lat;
+            const dLng = doc.location?.lng - lng;
+            const distance = Math.sqrt(dLat * dLat + dLng * dLng) * 111000;
+            
+            // Use wider radius for local results (3x original) to ensure visibility
+            const effectiveRadius = Math.max(radius * 3, 5000);
+            if (distance > effectiveRadius) return null;
+            
+            return {
+              name: doc.name,
+              type: doc.subType || doc.category,
+              location: {
+                address: doc.location?.address || "",
+                landmark: doc.location?.landmark || "",
+                area: doc.location?.area || "",
+                lat: doc.location?.lat,
+                lng: doc.location?.lng,
+              },
+              description: doc.description || "",
+              costLevel: doc.details?.isFree ? "Free" : doc.details?.priceRange || "Unknown",
+              imageUrl: doc.imageUrl || "",
+              tags: doc.tags || [],
+              external_place_id: `goa:${doc._id}`,
+              source: "goa_local",
+              category: doc.category,
+              details: doc.details || {},
+              isVerified: doc.isVerified,
+              distance,
+            };
+          })
+          .filter(Boolean)
+          .sort((a: any, b: any) => (a.distance || 0) - (b.distance || 0)); // Sort by distance
+      } catch (e) {
+        console.error("Goa local fetch error:", e);
+        return [];
+      }
+    }
+
+    // ============================================
+    // SOURCE 2: Overpass API (FREE, OpenStreetMap)
+    // ============================================
     const amenityTags = [
       "toilets",
       "drinking_water",
@@ -160,79 +241,11 @@ export async function GET(req: NextRequest) {
       }>;
     }
 
-    // Optional enrichment via OpenTripMap (requires OPENTRIPMAP_API_KEY)
-    async function fetchOpenTripMap() {
-      const apiKey = process.env.OPENTRIPMAP_API_KEY;
-      if (!apiKey) return [] as any[];
-      // Choose broad kinds relevant to refreshment and parks
-      const kinds = [
-        "foods",
-        "catering",
-        "fast_foods",
-        "cafes",
-        "restaurants",
-        "bars",
-        "pubs",
-        "supermarkets",
-        "marketplaces",
-        "parks",
-        "gardens",
-        "playgrounds",
-        "beaches",
-        "picnic_sites",
-        "drinking_water",
-        "toilets",
-      ].join(",");
-      const params = new URLSearchParams({
-        radius: String(Math.min(Math.max(radius, 100), 5000)),
-        lon: String(lng),
-        lat: String(lat),
-        kinds,
-        limit: "120",
-        format: "json",
-        apikey: apiKey,
-      });
-      const url = `https://api.opentripmap.com/0.1/en/places/radius?${params.toString()}`;
-      const res = await fetch(url);
-      if (!res.ok) return [] as any[];
-      const list = await res.json();
-      if (!Array.isArray(list)) return [] as any[];
-      // Normalize
-      return list
-        .map((p: any) => {
-          const name = p.name || p.kinds || "Place";
-          const lat0 = p.point?.lat;
-          const lng0 = p.point?.lon;
-          if (!Number.isFinite(lat0) || !Number.isFinite(lng0)) return null;
-          return {
-            name,
-            type: (p.kinds || "").split(",")[0] || "place",
-            location: {
-              address: "",
-              lat: lat0,
-              lng: lng0,
-            },
-            description: p.wikidata ? `Wikidata: ${p.wikidata}` : "",
-            costLevel: "Unknown",
-            imageUrl: "",
-            tags: (p.kinds || "").split(","),
-            external_place_id: p.xid ? `otm:${p.xid}` : `otm:${lat0.toFixed(6)},${lng0.toFixed(6)}:${name}`,
-            source: "opentripmap",
-            category: "external",
-          };
-        })
-        .filter(Boolean);
-    }
-
-    // Execute providers
-    const [overpassResults, otmResults] = await Promise.all([
-      fetchOverpass().catch(() => []),
-      fetchOpenTripMap().catch(() => []),
-    ]);
-
-    // Optional Google Places Nearby + Text Search
+    // ============================================
+    // SOURCE 3: Google Places (PAID, rich metadata)
+    // ============================================
     async function fetchGooglePlaces() {
-      const apiKey = process.env.GOOGLE_MAPS_BACKEND_API_KEY || process.env.GOOGLE_MAPS_BACKEND_API_KEY;
+      const apiKey = process.env.GOOGLE_MAPS_BACKEND_API_KEY;
       if (!apiKey) return [] as any[];
       const nearbyTypes = [
         "park",
@@ -319,15 +332,23 @@ export async function GET(req: NextRequest) {
         .filter(Boolean);
     }
 
-    const googleResults = await fetchGooglePlaces().catch(() => []);
+    // Execute all providers in parallel
+    const [goaLocalResults, overpassResults, googleResults] = await Promise.all([
+      fetchGoaLocal().catch(() => []),
+      fetchOverpass().catch(() => []),
+      fetchGooglePlaces().catch(() => []),
+    ]);
 
     // Deduplicate by external_place_id or name+lat/lng proximity
+    // Priority: goa_local > overpass > google (local data first)
     const merged: any[] = [];
     const seen = new Set<string>();
     function coordKey(lat0: number, lng0: number) {
       return `${lat0.toFixed(5)},${lng0.toFixed(5)}`;
     }
-    [...overpassResults, ...otmResults, ...googleResults].forEach((item) => {
+    
+    // Add in priority order: local first, then OSM, then Google
+    [...goaLocalResults, ...overpassResults, ...googleResults].forEach((item) => {
       const key =
         item.external_place_id ||
         `${item.name}|${coordKey(item.location.lat, item.location.lng)}`;
@@ -337,8 +358,8 @@ export async function GET(req: NextRequest) {
     });
 
     const usedSources = [];
+    if (goaLocalResults.length) usedSources.push("goa_local");
     if (overpassResults.length) usedSources.push("overpass");
-    if (otmResults.length) usedSources.push("opentripmap");
     if (googleResults.length) usedSources.push("google");
 
     return NextResponse.json(
@@ -349,5 +370,3 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: e.message || "Amenities lookup failed" }, { status: 500 });
   }
 }
-
-

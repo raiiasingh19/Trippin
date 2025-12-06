@@ -39,6 +39,23 @@ export default function RefreshmentModal() {
   );
 
   const onAdd = (item: any) => {
+    // Get the best location string for Google Directions:
+    // Priority: address > "lat,lng" coordinates > name
+    const getLocationString = (place: any): string => {
+      // If we have a proper address, use it
+      if (place.location?.address && place.location.address.length > 5) {
+        return place.location.address;
+      }
+      // If we have coordinates, use "lat,lng" format (Google Directions accepts this)
+      if (place.location?.lat && place.location?.lng) {
+        return `${place.location.lat},${place.location.lng}`;
+      }
+      // Fallback to name (might not work for obscure places)
+      return place.name;
+    };
+
+    const locationStr = getLocationString(item);
+
     // If this is immediately after first save, we want client-side insert and return to itinerary to allow explicit Save
     if (editingJourneyId && postSaveRedirectToTrips) {
       const idx = typeof posIndex === "number" ? posIndex : waypoints.length;
@@ -50,10 +67,10 @@ export default function RefreshmentModal() {
           setWaypoints(newWps);
           setStopTimes(newTimes);
         }
-        setDestination(item.name);
+        setDestination(locationStr);
       } else {
         const newWps = [...waypoints];
-        newWps.splice(idx, 0, item.name);
+        newWps.splice(idx, 0, locationStr);
         const newTimes = [...stopTimes];
         newTimes.splice(idx, 0, { arriveBy: "", leaveBy: "" });
         setWaypoints(newWps);
@@ -72,7 +89,7 @@ export default function RefreshmentModal() {
           const res = await fetch(`/api/journeys/${editingJourneyId}/addPlace`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ place: item, index: posIndex }),
+            body: JSON.stringify({ place: { ...item, locationStr }, index: posIndex }),
           });
           if (!res.ok) throw new Error("Failed to add amenity");
           // refresh saved journeys & current context
@@ -110,10 +127,10 @@ export default function RefreshmentModal() {
         setWaypoints(newWps);
         setStopTimes(newTimes);
       }
-      setDestination(item.name);
+      setDestination(locationStr);
     } else {
       const newWps = [...waypoints];
-      newWps.splice(idx, 0, item.name);
+      newWps.splice(idx, 0, locationStr);
       const newTimes = [...stopTimes];
       newTimes.splice(idx, 0, { arriveBy: "", leaveBy: "" });
       setWaypoints(newWps);

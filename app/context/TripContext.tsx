@@ -149,12 +149,15 @@ export function TripProvider({ children }: { children: ReactNode }) {
             longLegLabel = `${a} → ${b}`;
             setRefreshmentInsertIndex(i);
             const q = `restaurants near ${b}`;
-            const [gData, oData] = await Promise.all([
+            const endLat = leg.end_location.lat();
+            const endLng = leg.end_location.lng();
+            const [gData, oData, goaData] = await Promise.all([
               fetch(`/api/explore?q=${encodeURIComponent(q)}`).then(r => r.json()).catch(() => ({ results: [] })),
-              fetch(`/api/amenities?lat=${encodeURIComponent(leg.end_location.lat())}&lng=${encodeURIComponent(leg.end_location.lng())}&radius=1200`).then(r => r.json()).catch(() => ({ results: [] })),
+              fetch(`/api/amenities?lat=${encodeURIComponent(endLat)}&lng=${encodeURIComponent(endLng)}&radius=3000`).then(r => r.json()).catch(() => ({ results: [] })),
+              fetch(`/api/goa-amenities?lat=${encodeURIComponent(endLat)}&lng=${encodeURIComponent(endLng)}&radius=5000`).then(r => r.json()).catch(() => ({ results: [] })),
             ]);
-            const merged = [...(gData.results || []), ...(oData.results || [])];
-            setRefreshmentItems(merged.slice(0, 8));
+            const merged = [...(goaData.results || []), ...(oData.results || []), ...(gData.results || [])];
+            setRefreshmentItems(merged.slice(0, 12));
             setRefreshmentNote(`Long leg detected (${longLegLabel}). Consider a refreshment stop.`);
             setShowRefreshmentModal(true);
             break;
@@ -175,12 +178,15 @@ export function TripProvider({ children }: { children: ReactNode }) {
             longLegLabel = `${a} → ${b}`;
             setRefreshmentInsertIndex(i);
             const q = `restaurants near ${b}`;
-            const [gData, oData] = await Promise.all([
+            const endLat = leg.end_location.lat();
+            const endLng = leg.end_location.lng();
+            const [gData, oData, goaData] = await Promise.all([
               fetch(`/api/explore?q=${encodeURIComponent(q)}`).then(r => r.json()).catch(() => ({ results: [] })),
-              fetch(`/api/amenities?lat=${encodeURIComponent(leg.end_location.lat())}&lng=${encodeURIComponent(leg.end_location.lng())}&radius=1200`).then(r => r.json()).catch(() => ({ results: [] })),
+              fetch(`/api/amenities?lat=${encodeURIComponent(endLat)}&lng=${encodeURIComponent(endLng)}&radius=3000`).then(r => r.json()).catch(() => ({ results: [] })),
+              fetch(`/api/goa-amenities?lat=${encodeURIComponent(endLat)}&lng=${encodeURIComponent(endLng)}&radius=5000`).then(r => r.json()).catch(() => ({ results: [] })),
             ]);
-            const merged = [...(gData.results || []), ...(oData.results || [])];
-            setRefreshmentItems(merged.slice(0, 8));
+            const merged = [...(goaData.results || []), ...(oData.results || []), ...(gData.results || [])];
+            setRefreshmentItems(merged.slice(0, 12));
             setRefreshmentNote(`Long leg detected (${longLegLabel}). Consider a refreshment stop.`);
             setShowRefreshmentModal(true);
             break;
@@ -200,8 +206,9 @@ export function TripProvider({ children }: { children: ReactNode }) {
       setRefreshmentNote(null);
       const stops = waypoints.filter((w) => (w || "").trim());
       let insertIdx = 0;
-      let queryLabel = destination;
-      let lat = 15.491997;
+      let queryLabel = destination || origin || "Goa";
+      // Default to central Goa (Panjim area) as fallback
+      let lat = 15.4989;
       let lng = 73.8278;
       if (travelMode === "TRANSIT" && directionsSegments.length > 0) {
         const seg = directionsSegments[0];
@@ -209,24 +216,39 @@ export function TripProvider({ children }: { children: ReactNode }) {
         if (leg) {
           lat = leg.end_location.lat();
           lng = leg.end_location.lng();
-          queryLabel = [origin, ...stops, destination][1] || destination;
+          queryLabel = [origin, ...stops, destination][1] || destination || origin || "Goa";
         }
       } else if (directions) {
         const leg = directions.routes?.[0]?.legs?.[0];
         if (leg) {
           lat = leg.end_location.lat();
           lng = leg.end_location.lng();
-          queryLabel = [origin, ...stops, destination][1] || destination;
+          queryLabel = [origin, ...stops, destination][1] || destination || origin || "Goa";
         }
       }
       setRefreshmentInsertIndex(insertIdx);
       const q = `restaurants near ${queryLabel}`;
-      const [gData, oData] = await Promise.all([
+      // Use larger radius (3km) for better results and include both amenities endpoints
+      const [gData, oData, goaData] = await Promise.all([
         fetch(`/api/explore?q=${encodeURIComponent(q)}`).then(r => r.json()).catch(() => ({ results: [] })),
-        fetch(`/api/amenities?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&radius=1200`).then(r => r.json()).catch(() => ({ results: [] })),
+        fetch(`/api/amenities?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&radius=3000`).then(r => r.json()).catch(() => ({ results: [] })),
+        fetch(`/api/goa-amenities?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&radius=5000`).then(r => r.json()).catch(() => ({ results: [] })),
       ]);
-      const merged = [...(gData.results || []), ...(oData.results || [])];
-      setRefreshmentItems(merged.slice(0, 8));
+      // Merge all results, prioritizing local Goa data
+      const merged = [
+        ...(goaData.results || []),
+        ...(oData.results || []),
+        ...(gData.results || []),
+      ];
+      // Deduplicate by name (case-insensitive)
+      const seen = new Set<string>();
+      const deduped = merged.filter((item: any) => {
+        const key = (item.name || "").toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setRefreshmentItems(deduped.slice(0, 12));
       setRefreshmentNote(`Nearby options around ${queryLabel}`);
       setShowRefreshmentModal(true);
     } catch {
@@ -409,11 +431,18 @@ export function TripProvider({ children }: { children: ReactNode }) {
             ? google.maps.TransitRoutePreference.FEWER_TRANSFERS
             : google.maps.TransitRoutePreference.LESS_WALKING;
 
-        // South Goa hubs for fallback routing - ordered by likelihood of success
+        // Goa transit hubs for fallback routing - includes North, Central, and South Goa
         const HUBS = [
-          "Colva Circle, Goa",           // Closest to Colva Beach
-          "Majorda Bus Stand, Goa",      // Close to Majorda Beach area
-          "Margao Kadamba Bus Stand, Goa", // Major transit hub
+          // North/Central Goa hubs
+          "Panaji Kadamba Bus Stand, Goa",    // Main hub in Panaji
+          "Vasco da Gama Bus Stand, Goa",     // Near KK Birla campus
+          "Ponda Bus Stand, Goa",             // Central Goa hub
+          "Mapusa Bus Stand, Goa",            // North Goa hub
+          "Old Goa Bus Stop, Goa",            // Between Panaji and Ponda
+          // South Goa hubs
+          "Margao Kadamba Bus Stand, Goa",    // Major South Goa hub
+          "Colva Circle, Goa",
+          "Majorda Bus Stand, Goa",
           "Verna Industrial Estate Bus Stop, Goa",
           "Cortalim Bus Stand, Goa",
         ];
@@ -457,182 +486,175 @@ export function TripProvider({ children }: { children: ReactNode }) {
           return r.routes?.[0]?.legs?.[0]?.duration?.value || 0;
         };
 
-        // ===========================================
-        // STEP 1: Try direct origin -> destination transit
-        // ===========================================
-        console.log("[TRANSIT] Step 1: Trying direct route...");
-        const directTransit = await routeRequest({
-            origin,
-            destination,
+        // Helper function to find route for a single segment (with fallback via hubs)
+        const findSegmentRoute = async (
+          segOrigin: string, 
+          segDest: string, 
+          segDeparture: Date
+        ): Promise<{ segments: google.maps.DirectionsResult[], itineraryItems: { title: string; description: string }[], totalDuration: number }> => {
+          // Try direct transit first
+          const directTransit = await routeRequest({
+            origin: segOrigin,
+            destination: segDest,
             travelMode: google.maps.TravelMode.TRANSIT,
             transitOptions: {
-            routingPreference: transitPreference,
-            departureTime: departureDate,
-            },
-          });
-        
-        if (directTransit && hasTransitLeg(directTransit)) {
-          console.log("[TRANSIT] Step 1: Direct route found with transit!");
-          if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride([directTransit]);
-          else setDirectionsSegments([directTransit]);
-          setItinerary([{ title: origin, description: "" }, { title: destination, description: "" }]);
-          setSegmentInfos([]);
-          setShowItinerary(true);
-          setTimeout(() => setShowModal(false), 0);
-          return;
-        }
-        console.log("[TRANSIT] Step 1: No direct transit route found.");
-
-        // ===========================================
-        // FALLBACK A: Origin -> Hub (transit), Hub -> Destination (walk if <=5km)
-        // ===========================================
-        console.log("[TRANSIT] Fallback A: Trying origin -> hub -> destination...");
-        
-        for (const hub of HUBS) {
-          console.log(`[TRANSIT] Trying hub: ${hub}`);
-          
-          // Try transit from origin to hub FIRST (don't pre-filter by distance)
-          const originToHub = await routeRequest({
-            origin,
-            destination: hub,
-                  travelMode: google.maps.TravelMode.TRANSIT,
-                  transitOptions: {
               routingPreference: transitPreference,
-              departureTime: departureDate,
+              departureTime: segDeparture,
             },
           });
           
-          if (!originToHub || !hasTransitLeg(originToHub)) {
-            console.log(`[TRANSIT] No transit from origin to hub ${hub}`);
-            continue;
+          if (directTransit && hasTransitLeg(directTransit)) {
+            return {
+              segments: [directTransit],
+              itineraryItems: [],
+              totalDuration: getDuration(directTransit),
+            };
           }
-          console.log(`[TRANSIT] Found transit from origin to hub ${hub}!`);
-          
-          // Get walking route from hub to destination
-          const hubToDest = await routeRequest({
-            origin: hub,
-            destination,
+
+          // Try walking if distance is short (<=3km)
+          const walkRoute = await routeRequest({
+            origin: segOrigin,
+            destination: segDest,
             travelMode: google.maps.TravelMode.WALKING,
           });
           
-          if (!hubToDest) {
-            console.log(`[TRANSIT] Could not get walking route from hub to destination`);
-            continue;
+          if (walkRoute) {
+            const walkDist = getWalkDistance(walkRoute);
+            if (walkDist <= 3000) {
+              return {
+                segments: [walkRoute],
+                itineraryItems: [{ title: "", description: `Walk ${Math.round(walkDist)}m` }],
+                totalDuration: getDuration(walkRoute),
+              };
+            }
+          }
+
+          // Try via hubs
+          for (const hub of HUBS) {
+            // Try transit from origin to hub, then walk to destination
+            const originToHub = await routeRequest({
+              origin: segOrigin,
+              destination: hub,
+              travelMode: google.maps.TravelMode.TRANSIT,
+              transitOptions: {
+                routingPreference: transitPreference,
+                departureTime: segDeparture,
+              },
+            });
+            
+            if (originToHub && hasTransitLeg(originToHub)) {
+              const hubToDest = await routeRequest({
+                origin: hub,
+                destination: segDest,
+                travelMode: google.maps.TravelMode.WALKING,
+              });
+              
+              if (hubToDest && getWalkDistance(hubToDest) <= MAX_WALK_DISTANCE_M) {
+                return {
+                  segments: [originToHub, hubToDest],
+                  itineraryItems: [{ title: hub, description: `Walk ${Math.round(getWalkDistance(hubToDest))}m` }],
+                  totalDuration: getDuration(originToHub) + getDuration(hubToDest),
+                };
+              }
+            }
+
+            // Try walk from origin to hub, then transit to destination
+            const walkToHub = await routeRequest({
+              origin: segOrigin,
+              destination: hub,
+              travelMode: google.maps.TravelMode.WALKING,
+            });
+            
+            if (walkToHub && getWalkDistance(walkToHub) <= MAX_WALK_DISTANCE_M) {
+              const walkDuration = getDuration(walkToHub);
+              const transitTime = new Date(segDeparture.getTime() + walkDuration * 1000);
+              
+              const hubToDest = await routeRequest({
+                origin: hub,
+                destination: segDest,
+                travelMode: google.maps.TravelMode.TRANSIT,
+                transitOptions: {
+                  routingPreference: transitPreference,
+                  departureTime: transitTime,
+                },
+              });
+              
+              if (hubToDest && hasTransitLeg(hubToDest)) {
+                return {
+                  segments: [walkToHub, hubToDest],
+                  itineraryItems: [{ title: hub, description: `Walk ${Math.round(getWalkDistance(walkToHub))}m to hub` }],
+                  totalDuration: walkDuration + getDuration(hubToDest),
+                };
+              }
+            }
+          }
+
+          // Fallback to walking
+          if (walkRoute) {
+            return {
+              segments: [walkRoute],
+              itineraryItems: [{ title: "", description: `Walk ${Math.round(getWalkDistance(walkRoute))}m (no transit available)` }],
+              totalDuration: getDuration(walkRoute),
+            };
+          }
+
+          return { segments: [], itineraryItems: [], totalDuration: 0 };
+        };
+
+        // Build list of all route points: origin, waypoints, destination
+        const allPoints = [origin, ...stops, destination];
+        const allSegments: google.maps.DirectionsResult[] = [];
+        const allItineraryItems: { title: string; description: string }[] = [{ title: origin, description: "" }];
+        let currentDeparture = departureDate;
+
+        console.log(`[TRANSIT] Routing through ${allPoints.length} points: ${allPoints.join(" → ")}`);
+
+        // Route each segment
+        for (let i = 0; i < allPoints.length - 1; i++) {
+          const segOrigin = allPoints[i];
+          const segDest = allPoints[i + 1];
+          console.log(`[TRANSIT] Routing segment ${i + 1}: ${segOrigin} → ${segDest}`);
+          
+          const result = await findSegmentRoute(segOrigin, segDest, currentDeparture);
+          
+          if (result.segments.length > 0) {
+            allSegments.push(...result.segments);
+            // Add intermediate itinerary items (like hub stops)
+            result.itineraryItems.forEach(item => {
+              if (item.title) {
+                allItineraryItems.push(item);
+              }
+            });
+            // Update departure time for next segment
+            currentDeparture = new Date(currentDeparture.getTime() + result.totalDuration * 1000);
           }
           
-          const walkDist = getWalkDistance(hubToDest);
-          console.log(`[TRANSIT] Walking distance from hub to destination: ${walkDist}m`);
-          
-          if (walkDist <= MAX_WALK_DISTANCE_M) {
-            // SUCCESS: origin -> hub (transit) + hub -> destination (walk)
-            console.log(`[TRANSIT] SUCCESS: Found route via ${hub}!`);
-            const segments = [originToHub, hubToDest];
-            if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(segments);
-            else setDirectionsSegments(segments);
-            setItinerary([
-              { title: origin, description: "" },
-              { title: hub, description: `Walk ${Math.round(walkDist)}m to destination` },
-              { title: destination, description: "" },
-            ]);
-            setSegmentInfos([]);
-            setShowItinerary(true);
-            setTimeout(() => setShowModal(false), 0);
-            return;
+          // Add the destination of this segment to itinerary
+          if (i < allPoints.length - 2) {
+            // This is a waypoint
+            const wpIdx = i;
+            const arrive = stopTimes?.[wpIdx]?.arriveBy || "";
+            const leave = stopTimes?.[wpIdx]?.leaveBy || "";
+            const parts: string[] = [];
+            if (arrive) parts.push(`Arrive by ${arrive}`);
+            if (leave) parts.push(`Leave by ${leave}`);
+            allItineraryItems.push({ title: segDest, description: parts.join(" • ") });
           } else {
-            console.log(`[TRANSIT] Walk distance ${walkDist}m exceeds max ${MAX_WALK_DISTANCE_M}m`);
+            // This is the final destination
+            allItineraryItems.push({ title: destination, description: "" });
           }
         }
-        console.log("[TRANSIT] Fallback A: No suitable hub found.");
 
-        // ===========================================
-        // FALLBACK B: Origin -> Hub (walk if <=5km), Hub -> Destination (transit)
-        // ===========================================
-        console.log("[TRANSIT] Fallback B: Trying origin (walk) -> hub -> destination (transit)...");
-        
-        for (const hub of HUBS) {
-          console.log(`[TRANSIT] Trying hub: ${hub}`);
-          
-          // Get walking route from origin to hub
-          const originToHub = await routeRequest({
-            origin,
-            destination: hub,
-            travelMode: google.maps.TravelMode.WALKING,
-          });
-          
-          if (!originToHub) {
-            console.log(`[TRANSIT] Could not get walking route from origin to hub`);
-            continue;
-          }
-          
-          const walkDist = getWalkDistance(originToHub);
-          const walkDuration = getDuration(originToHub);
-          console.log(`[TRANSIT] Walking distance origin to hub: ${walkDist}m, duration: ${walkDuration}s`);
-          
-          if (walkDist > MAX_WALK_DISTANCE_M) {
-            console.log(`[TRANSIT] Walking distance ${walkDist}m exceeds max ${MAX_WALK_DISTANCE_M}m, skipping`);
-            continue;
-          }
-          
-          // Calculate new departure time after walking
-          const transitDepartureTime = new Date(departureDate.getTime() + walkDuration * 1000);
-          console.log(`[TRANSIT] Transit departure time after walk: ${transitDepartureTime.toISOString()}`);
-          
-          // Try transit from hub to destination
-          const hubToDest = await routeRequest({
-            origin: hub,
-            destination,
-                          travelMode: google.maps.TravelMode.TRANSIT,
-                          transitOptions: {
-              routingPreference: transitPreference,
-              departureTime: transitDepartureTime,
-            },
-          });
-          
-          if (!hubToDest || !hasTransitLeg(hubToDest)) {
-            console.log(`[TRANSIT] No transit from hub ${hub} to destination`);
-            continue;
-          }
-          
-          // SUCCESS: origin -> hub (walk) + hub -> destination (transit)
-          console.log(`[TRANSIT] SUCCESS: Found route via ${hub}!`);
-          const segments = [originToHub, hubToDest];
-          if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(segments);
-          else setDirectionsSegments(segments);
-          setItinerary([
-            { title: origin, description: `Walk ${Math.round(walkDist)}m to ${hub}` },
-            { title: hub, description: "" },
-            { title: destination, description: "" },
-          ]);
-                      setSegmentInfos([]);
-                      setShowItinerary(true);
-                      setTimeout(() => setShowModal(false), 0);
-                      return;
-                    }
-        console.log("[TRANSIT] Fallback B: No suitable hub found.");
-
-        // ===========================================
-        // NO TRANSIT FOUND - Show walking route as fallback
-        // ===========================================
-        console.log("[TRANSIT] No transit routes found. Showing walking fallback.");
-        
-        const walkingRoute = await routeRequest({
-            origin,
-            destination,
-          travelMode: google.maps.TravelMode.WALKING,
-        });
-        
-        if (walkingRoute) {
-          if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride([walkingRoute]);
-          else setDirectionsSegments([walkingRoute]);
+        // Set results
+        if (allSegments.length > 0) {
+          if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride(allSegments);
+          else setDirectionsSegments(allSegments);
         } else {
           if (setDirectionsSegmentsOverride) setDirectionsSegmentsOverride([]);
           else setDirectionsSegments([]);
         }
         
-        setItinerary([
-          { title: origin, description: "No transit routes found" },
-          { title: destination, description: "Showing walking route" },
-        ]);
+        setItinerary(allItineraryItems);
         setSegmentInfos([]);
         setShowItinerary(true);
         setTimeout(() => setShowModal(false), 0);
@@ -704,6 +726,8 @@ export function TripProvider({ children }: { children: ReactNode }) {
           ];
           setItinerary(items);
           setShowItinerary(true);
+          // Close the modal after showing itinerary
+          setTimeout(() => setShowModal(false), 0);
         }
       );
     }

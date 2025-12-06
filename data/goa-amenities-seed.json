@@ -1,0 +1,358 @@
+{
+  "_meta": {
+    "description": "Seed data for Goa local amenities database",
+    "version": "1.0.0",
+    "lastUpdated": "2024-12-05",
+    "howToUpdate": "Edit this JSON file and run: npm run seed:amenities"
+  },
+  "amenities": [
+    {
+      "name": "Panjim Municipal Garden Toilet",
+      "category": "toilet",
+      "subType": "public_toilet",
+      "location": {
+        "address": "Municipal Garden, Panjim",
+        "landmark": "Inside Municipal Garden near fountain",
+        "area": "Panjim",
+        "lat": 15.4989,
+        "lng": 73.8278
+      },
+      "description": "Clean public toilet inside the municipal garden. Free to use.",
+      "details": {
+        "isFree": true,
+        "isClean": true,
+        "hasWater": true,
+        "openTime": "06:00",
+        "closeTime": "22:00"
+      },
+      "tags": ["toilet", "free", "clean", "panjim"],
+      "isVerified": true
+    },
+    {
+      "name": "Ravi's Fruit Cart",
+      "category": "food_vendor",
+      "subType": "fruit_cart",
+      "location": {
+        "address": "Near Panjim Library",
+        "landmark": "Opposite Panjim Library main entrance",
+        "area": "Panjim",
+        "lat": 15.4957,
+        "lng": 73.8295
+      },
+      "description": "Fresh seasonal fruits. Famous for his cut fruit plates with masala.",
+      "details": {
+        "cuisine": ["fruit", "fresh_juice"],
+        "priceRange": "₹20-50",
+        "bestFor": ["snacks", "refreshment"],
+        "openTime": "08:00",
+        "closeTime": "20:00"
+      },
+      "tags": ["fruit", "fresh", "cheap", "snacks", "street_food"],
+      "isVerified": true
+    },
+    {
+      "name": "Beef Cutlet Aunty",
+      "category": "food_vendor",
+      "subType": "cutlet_seller",
+      "location": {
+        "address": "Fontainhas, Panjim",
+        "landmark": "Near 31st January Road junction",
+        "area": "Panjim",
+        "lat": 15.4932,
+        "lng": 73.8312
+      },
+      "description": "Famous beef cutlets. A Panjim institution. Cash only.",
+      "details": {
+        "cuisine": ["cutlets", "beef", "snacks"],
+        "priceRange": "₹15-30",
+        "bestFor": ["snacks", "evening"],
+        "openTime": "16:00",
+        "closeTime": "20:00"
+      },
+      "tags": ["cutlets", "beef", "famous", "street_food", "evening_snack"],
+      "isVerified": true
+    },
+    {
+      "name": "GTDC Panaji Residency",
+      "category": "rest_area",
+      "subType": "gtdc_hotel",
+      "location": {
+        "address": "Patto, Panaji",
+        "landmark": "Near Patto Bridge",
+        "area": "Panjim",
+        "lat": 15.4963,
+        "lng": 73.8246
+      },
+      "description": "GTDC hotel with restaurant and public toilet facilities.",
+      "details": {
+        "isFree": false,
+        "isClean": true,
+        "hasWater": true,
+        "openTime": "07:00",
+        "closeTime": "22:00"
+      },
+      "tags": ["gtdc", "hotel", "restaurant", "toilet", "panjim"],
+      "isVerified": true
+    },
+    {
+      "name": "Calangute Beach",
+      "category": "beach_access",
+      "subType": "beach",
+      "location": {
+        "address": "Calangute Beach, Goa",
+        "landmark": "Main beach entrance",
+        "area": "Calangute",
+        "lat": 15.5438,
+        "lng": 73.7553
+      },
+      "description": "Popular beach in North Goa. Public beach with various facilities nearby.",
+      "details": {
+        "isFree": true,
+        "hasBenches": true
+      },
+      "tags": ["beach", "free", "north_goa", "popular"],
+      "isVerified": true
+    },
+    {
+      "name": "Baga Beach",
+      "category": "beach_access",
+      "subType": "beach",
+      "location": {
+        "address": "Baga Beach, Goa",
+        "landmark": "Main beach entrance",
+        "area": "Baga",
+        "lat": 15.5551,
+        "lng": 73.7514
+      },
+      "description": "Famous beach known for nightlife and water sports.",
+      "details": {
+        "isFree": true
+      },
+      "tags": ["beach", "free", "north_goa", "nightlife", "water_sports"],
+      "isVerified": true
+    },
+    {
+      "name": "Palolem Beach",
+      "category": "beach_access",
+      "subType": "beach",
+      "location": {
+        "address": "Palolem Beach, Canacona",
+        "landmark": "Main beach entrance",
+        "area": "Palolem",
+        "lat": 15.0100,
+        "lng": 74.0231
+      },
+      "description": "Crescent-shaped beach in South Goa. Calm waters, ideal for swimming.",
+      "details": {
+        "isFree": true,
+        "hasBenches": true
+      },
+      "tags": ["beach", "free", "south_goa", "swimming", "peaceful"],
+      "isVerified": true
+    },
+    {
+      "name": "Dudhsagar Waterfalls",
+      "category": "park",
+      "subType": "waterfall",
+      "location": {
+        "address": "Mollem, Sanguem Taluka",
+        "landmark": "Inside Bhagwan Mahavir Sanctuary",
+        "area": "Dudhsagar",
+        "lat": 15.3144,
+        "lng": 74.3147
+      },
+      "description": "Four-tiered waterfall, one of India's tallest. Best visited during monsoon.",
+      "details": {
+        "isFree": false,
+        "priceRange": "₹400-600",
+        "openTime": "07:00",
+        "closeTime": "16:00"
+      },
+      "tags": ["waterfall", "trekking", "nature", "monsoon", "photography"],
+      "isVerified": true
+    },
+    {
+      "name": "Basilica of Bom Jesus",
+      "category": "temple",
+      "subType": "church",
+      "location": {
+        "address": "Old Goa",
+        "landmark": "UNESCO World Heritage Site",
+        "area": "Old Goa",
+        "lat": 15.5008,
+        "lng": 73.9116
+      },
+      "description": "16th century church housing remains of St. Francis Xavier. Public toilets available.",
+      "details": {
+        "isFree": true,
+        "isClean": true,
+        "hasWater": true,
+        "wheelchairAccessible": true,
+        "openTime": "09:00",
+        "closeTime": "18:30"
+      },
+      "tags": ["church", "heritage", "unesco", "old_goa", "toilet", "free"],
+      "isVerified": true
+    },
+    {
+      "name": "Shri Mangeshi Temple",
+      "category": "temple",
+      "subType": "hindu_temple",
+      "location": {
+        "address": "Mangeshi, Priol, Ponda",
+        "landmark": "Main Ponda Temple",
+        "area": "Mangeshi",
+        "lat": 15.4500,
+        "lng": 73.9833
+      },
+      "description": "Major Hindu temple dedicated to Shiva. Free drinking water and toilet facilities.",
+      "details": {
+        "isFree": true,
+        "isClean": true,
+        "hasWater": true,
+        "openTime": "06:00",
+        "closeTime": "21:00"
+      },
+      "tags": ["temple", "hindu", "shiva", "toilet", "water", "free"],
+      "isVerified": true
+    },
+    {
+      "name": "Bondla Wildlife Sanctuary",
+      "category": "park",
+      "subType": "wildlife_sanctuary",
+      "location": {
+        "address": "Bondla, Ponda Taluka",
+        "landmark": "Bondla Forest",
+        "area": "Bondla",
+        "lat": 15.4167,
+        "lng": 74.0167
+      },
+      "description": "Mini zoo and wildlife sanctuary. Has deer park, botanical garden. Toilets and canteen available.",
+      "details": {
+        "isFree": false,
+        "priceRange": "₹20-50",
+        "hasBenches": true,
+        "hasShade": true,
+        "openTime": "09:00",
+        "closeTime": "17:00"
+      },
+      "tags": ["wildlife", "zoo", "nature", "family", "toilet", "canteen"],
+      "isVerified": true
+    },
+    {
+      "name": "Mapusa Friday Market",
+      "category": "market",
+      "subType": "weekly_market",
+      "location": {
+        "address": "Mapusa Market",
+        "landmark": "Main market square",
+        "area": "Mapusa",
+        "lat": 15.5937,
+        "lng": 73.8102
+      },
+      "description": "Famous Friday market. Multiple food stalls, fresh produce, local snacks. Public toilets nearby.",
+      "details": {
+        "openTime": "08:00",
+        "closeTime": "18:00",
+        "openDays": ["Fri"],
+        "isFree": true
+      },
+      "tags": ["market", "friday", "local", "shopping", "food", "mapusa"],
+      "isVerified": true
+    },
+    {
+      "name": "Kadamba Bus Stand Water Cooler",
+      "category": "drinking_water",
+      "subType": "water_cooler",
+      "location": {
+        "address": "Kadamba Bus Stand, Panjim",
+        "landmark": "Inside bus stand, platform 1 area",
+        "area": "Panjim",
+        "lat": 15.4963,
+        "lng": 73.8187
+      },
+      "description": "Free drinking water cooler inside the bus stand.",
+      "details": {
+        "isFree": true,
+        "openTime": "05:00",
+        "closeTime": "23:00"
+      },
+      "tags": ["water", "free", "bus_stand", "panjim"],
+      "isVerified": true
+    },
+    {
+      "name": "Chapora Fort",
+      "category": "park",
+      "subType": "fort",
+      "location": {
+        "address": "Chapora, Bardez",
+        "landmark": "Dil Chahta Hai fame",
+        "area": "Chapora",
+        "lat": 15.6053,
+        "lng": 73.7342
+      },
+      "description": "Hilltop fort with stunning sunset views. No facilities - bring water.",
+      "details": {
+        "isFree": true,
+        "hasBenches": false,
+        "hasShade": false
+      },
+      "tags": ["fort", "heritage", "sunset", "views", "free", "vagator"],
+      "isVerified": true
+    },
+    {
+      "name": "Fort Aguada",
+      "category": "park",
+      "subType": "fort",
+      "location": {
+        "address": "Sinquerim, Bardez",
+        "landmark": "Aguada Beach",
+        "area": "Aguada",
+        "lat": 15.4922,
+        "lng": 73.7731
+      },
+      "description": "17th century Portuguese fort with lighthouse. Panoramic views.",
+      "details": {
+        "isFree": false,
+        "priceRange": "₹25-300",
+        "openTime": "09:30",
+        "closeTime": "18:00"
+      },
+      "tags": ["fort", "heritage", "views", "lighthouse", "photography"],
+      "isVerified": true
+    }
+  ],
+  "knownLocations": {
+    "_comment": "Fallback coordinates when geocoding fails. Add new locations here.",
+    "panjim": { "lat": 15.4989, "lng": 73.8278, "area": "Panjim" },
+    "panaji": { "lat": 15.4989, "lng": 73.8278, "area": "Panjim" },
+    "calangute": { "lat": 15.5438, "lng": 73.7553, "area": "Calangute" },
+    "baga": { "lat": 15.5551, "lng": 73.7514, "area": "Baga" },
+    "anjuna": { "lat": 15.5739, "lng": 73.7413, "area": "Anjuna" },
+    "vagator": { "lat": 15.5969, "lng": 73.7394, "area": "Vagator" },
+    "arambol": { "lat": 15.6867, "lng": 73.7042, "area": "Arambol" },
+    "morjim": { "lat": 15.6267, "lng": 73.7300, "area": "Morjim" },
+    "mandrem": { "lat": 15.6622, "lng": 73.7133, "area": "Mandrem" },
+    "ashwem": { "lat": 15.6400, "lng": 73.7267, "area": "Ashwem" },
+    "candolim": { "lat": 15.5178, "lng": 73.7621, "area": "Candolim" },
+    "sinquerim": { "lat": 15.4972, "lng": 73.7683, "area": "Sinquerim" },
+    "miramar": { "lat": 15.4729, "lng": 73.8068, "area": "Miramar" },
+    "dona paula": { "lat": 15.4588, "lng": 73.8053, "area": "Dona Paula" },
+    "colva": { "lat": 15.2789, "lng": 73.9221, "area": "Colva" },
+    "benaulim": { "lat": 15.2642, "lng": 73.9312, "area": "Benaulim" },
+    "palolem": { "lat": 15.0100, "lng": 74.0231, "area": "Palolem" },
+    "agonda": { "lat": 15.0447, "lng": 74.0072, "area": "Agonda" },
+    "margao": { "lat": 15.2832, "lng": 73.9862, "area": "Margao" },
+    "mapusa": { "lat": 15.5937, "lng": 73.8102, "area": "Mapusa" },
+    "vasco": { "lat": 15.3980, "lng": 73.8113, "area": "Vasco" },
+    "ponda": { "lat": 15.4033, "lng": 73.9667, "area": "Ponda" },
+    "old goa": { "lat": 15.5008, "lng": 73.9116, "area": "Old Goa" },
+    "dudhsagar": { "lat": 15.3144, "lng": 74.3147, "area": "Dudhsagar" },
+    "bondla": { "lat": 15.4167, "lng": 74.0167, "area": "Bondla" },
+    "mollem": { "lat": 15.3667, "lng": 74.2333, "area": "Mollem" },
+    "chapora": { "lat": 15.6053, "lng": 73.7342, "area": "Chapora" },
+    "aguada": { "lat": 15.4922, "lng": 73.7731, "area": "Aguada" },
+    "tiracol": { "lat": 15.7233, "lng": 73.6867, "area": "Tiracol" }
+  }
+}
+

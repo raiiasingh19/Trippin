@@ -20,17 +20,39 @@ export async function POST(request: NextRequest, context: { params: { id: string
   if (!body) return NextResponse.json({ message: "Missing body" }, { status: 400 });
 
   // body can be { placeId } or { place: {...} }
-  let placeName = "";
+  // placeLocation is what we store as waypoint - prefer address/coords for routing
+  let placeLocation = "";
   const requestedIndex = typeof body.index === "number" ? body.index : undefined;
   if (body.placeId) {
     const p = await Place.findById(body.placeId);
     if (!p) return NextResponse.json({ message: "Place not found" }, { status: 404 });
-    placeName = p.name;
-  } else if (body.place && body.place.name) {
-    placeName = body.place.name;
+    // Use address or coords if available, fallback to name
+    if (p.location?.address) {
+      placeLocation = p.location.address;
+    } else if (p.location?.lat && p.location?.lng) {
+      placeLocation = `${p.location.lat},${p.location.lng}`;
+    } else {
+      placeLocation = p.name;
+    }
+  } else if (body.place) {
+    // Prefer locationStr if provided (from RefreshmentModal), then address, then coords, then name
+    if (body.place.locationStr) {
+      placeLocation = body.place.locationStr;
+    } else if (body.place.location?.address && body.place.location.address.length > 5) {
+      placeLocation = body.place.location.address;
+    } else if (body.place.location?.lat && body.place.location?.lng) {
+      placeLocation = `${body.place.location.lat},${body.place.location.lng}`;
+    } else if (body.place.name) {
+      placeLocation = body.place.name;
+    } else {
+      return NextResponse.json({ message: "Missing place info" }, { status: 400 });
+    }
   } else {
     return NextResponse.json({ message: "Missing place info" }, { status: 400 });
   }
+  
+  // Keep the display name for itinerary text
+  const placeName = body.place?.name || placeLocation;
 
   // find journey owned by user
   const journey = await Journey.findOne({ _id: id, userId: user._id });
@@ -55,7 +77,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
         journey.waypoints.push(journey.destination);
         journey.stopTimes.push({ arriveBy: "", leaveBy: "" });
       }
-      journey.destination = placeName;
+      journey.destination = placeLocation;
       // textual itinerary: append a note
       const entry = `${placeName}: Added via Explore`;
       if (!journey.itinerary) journey.itinerary = entry;
@@ -107,7 +129,7 @@ export async function POST(request: NextRequest, context: { params: { id: string
   // ensure insertAt is defined for TypeScript and runtime safety
   if (typeof insertAt === "undefined") insertAt = journey.waypoints.length;
 
-  journey.waypoints.splice(insertAt, 0, placeName);
+  journey.waypoints.splice(insertAt, 0, placeLocation);
   journey.stopTimes.splice(insertAt, 0, providedStop || { arriveBy: "", leaveBy: "" });
   // update itinerary textual lines to keep in sync
   const entry = `${placeName}: Added via Explore`;
