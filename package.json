@@ -9,7 +9,8 @@
     "lint": "next lint",
     "seed:amenities": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed-amenities.ts",
     "scrape:goa-tourism": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/scrape-goa-tourism.ts",
-    "scrape:goa-tourism-v2": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/scrape-goa-tourism-v2.ts"
+    "scrape:goa-tourism-v2": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/scrape-goa-tourism-v2.ts",
+    "scrape:goa-food": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/scrape-goa-food.ts"
   },
   "dependencies": {
     "@next/env": "^15.1.6",

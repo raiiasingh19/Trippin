@@ -252,8 +252,8 @@ export function TripProvider({ children }: { children: ReactNode }) {
       const stops = waypoints.filter((w) => (w || "").trim());
       let insertIdx = 0;
       
-      // Search radius: 2km near each stop/destination
-      const SEARCH_RADIUS_M = 2000;
+      // Search radius: 3km near each stop/destination
+      const SEARCH_RADIUS_M = 3000;
       
       // Collect search points: only destination + waypoints (not entire route)
       const searchPoints: { lat: number; lng: number; label: string }[] = [];
@@ -304,80 +304,233 @@ export function TripProvider({ children }: { children: ReactNode }) {
         searchPoints.push(fallbackPoint);
       }
       
-      console.log(`[forceShowAmenities] Searching within ${SEARCH_RADIUS_M}m of ${searchPoints.length} stops:`, 
+      console.log(`[forceShowAmenities] Searching within 3km of ${searchPoints.length} stops:`, 
         searchPoints.map(p => p.label));
       
       setRefreshmentInsertIndex(insertIdx);
       
-      // Search amenities within 2km of each stop/destination
-      const allPromises: Promise<{ results: any[]; label: string }>[] = [];
+      // Fetch amenities from both APIs for each search point
+      const allPromises: Promise<{ results: any[]; label: string; source: string }>[] = [];
       
       searchPoints.forEach(pt => {
         // Amenities API (includes Overpass + Google)
         allPromises.push(
           fetch(`/api/amenities?lat=${pt.lat}&lng=${pt.lng}&radius=${SEARCH_RADIUS_M}`)
             .then(r => r.json())
-            .then(data => ({ results: data.results || [], label: pt.label }))
-            .catch(() => ({ results: [], label: pt.label }))
+            .then(data => {
+              console.log(`[forceShowAmenities] /api/amenities for ${pt.label}: ${data.results?.length || 0} results`);
+              return { results: data.results || [], label: pt.label, source: 'amenities' };
+            })
+            .catch((e) => {
+              console.error(`[forceShowAmenities] /api/amenities error for ${pt.label}:`, e);
+              return { results: [], label: pt.label, source: 'amenities' };
+            })
         );
         // Local Goa amenities
         allPromises.push(
           fetch(`/api/goa-amenities?lat=${pt.lat}&lng=${pt.lng}&radius=${SEARCH_RADIUS_M}`)
             .then(r => r.json())
-            .then(data => ({ results: data.results || [], label: pt.label }))
-            .catch(() => ({ results: [], label: pt.label }))
+            .then(data => {
+              console.log(`[forceShowAmenities] /api/goa-amenities for ${pt.label}: ${data.results?.length || 0} results`);
+              return { results: data.results || [], label: pt.label, source: 'goa-amenities' };
+            })
+            .catch((e) => {
+              console.error(`[forceShowAmenities] /api/goa-amenities error for ${pt.label}:`, e);
+              return { results: [], label: pt.label, source: 'goa-amenities' };
+            })
         );
       });
       
       const responses = await Promise.all(allPromises);
       
+      // Log raw response counts
+      let totalFromApi = 0;
+      responses.forEach(res => {
+        totalFromApi += res.results?.length || 0;
+      });
+      console.log(`[forceShowAmenities] Total raw items from all API calls: ${totalFromApi}`);
+      
       // Merge all results, tagging each with which stop it's near
       const merged: any[] = [];
       responses.forEach(res => {
-        if (res?.results) {
+        if (res?.results && Array.isArray(res.results)) {
           res.results.forEach((item: any) => {
             merged.push({ ...item, nearStop: res.label });
           });
         }
       });
       
-      // Deduplicate by name (case-insensitive) and coordinates
+      console.log(`[forceShowAmenities] Total merged (before dedup): ${merged.length}`);
+      
+      // Deduplicate by name+coordinates (same name at same location = duplicate)
+      // Don't dedupe by name alone - "Public Toilet" in Colva is different from "Public Toilet" in Panjim
       const seen = new Set<string>();
       const deduped = merged.filter((item: any) => {
         const nameKey = (item.name || "").toLowerCase().trim();
         const coordKey = item.location?.lat && item.location?.lng 
-          ? `${item.location.lat.toFixed(4)},${item.location.lng.toFixed(4)}` 
-          : "";
+          ? `${item.location.lat.toFixed(4)},${item.location.lng.toFixed(4)}` // ~11m precision (4 decimals)
+          : Math.random().toString(); // No coords = always unique
         const key = `${nameKey}|${coordKey}`;
-        if (seen.has(key) || seen.has(nameKey)) return false;
+        if (seen.has(key)) return false;
         seen.add(key);
-        if (nameKey) seen.add(nameKey);
         return true;
       });
       
-      // Sort by: toilets first, then distance
-      const prioritized = deduped.sort((a: any, b: any) => {
-        // Toilets get highest priority
-        const aIsToilet = (a.category === "toilet" || a.type === "toilets" || 
-          (a.tags || []).some((t: string) => t.toLowerCase().includes("toilet")));
-        const bIsToilet = (b.category === "toilet" || b.type === "toilets" || 
-          (b.tags || []).some((t: string) => t.toLowerCase().includes("toilet")));
-        if (aIsToilet && !bIsToilet) return -1;
-        if (!aIsToilet && bIsToilet) return 1;
-        // Then sort by distance if available
-        return (a.distance || 0) - (b.distance || 0);
+      console.log(`[forceShowAmenities] After dedup: ${deduped.length} (removed ${merged.length - deduped.length} duplicates)`);
+      
+      // ============================================
+      // SMART CURATION: Category quotas + distance priority
+      // Goal: ~150-200 useful items, essentials first, closer preferred
+      // ============================================
+      
+      // Helper: normalize category for grouping
+      const getCategory = (item: any): string => {
+        const t = (item.type || item.category || "").toLowerCase();
+        // Essentials
+        if (["toilets", "toilet", "restroom"].includes(t)) return "toilet";
+        if (["drinking_water", "water_point"].includes(t)) return "water";
+        // Rest & relax
+        if (["bench", "shelter", "picnic_site", "picnic_table"].includes(t)) return "rest";
+        if (["park", "garden", "playground", "recreation_ground"].includes(t)) return "park";
+        if (["beach", "beach_access"].includes(t)) return "beach";
+        // Quick food (local life)
+        if (["kiosk", "convenience", "general", "variety_store", "supermarket", "grocery"].includes(t)) return "shop";
+        if (["fast_food", "food_court", "bakery", "confectionery", "pastry"].includes(t)) return "quickfood";
+        if (["ice_cream"].includes(t)) return "icecream";
+        // Dining
+        if (["restaurant", "food"].includes(t)) return "restaurant";
+        if (["cafe", "coffee"].includes(t)) return "cafe";
+        if (["bar", "pub", "biergarten"].includes(t)) return "bar";
+        // Services
+        if (["fuel", "atm", "pharmacy"].includes(t)) return "services";
+        // Accommodation
+        if (["hotel", "guest_house", "hostel", "motel", "resort", "lodging"].includes(t)) return "lodging";
+        // Attractions
+        if (["tourist_attraction", "attraction", "viewpoint", "artwork"].includes(t)) return "attraction";
+        if (["temple", "church", "place_of_worship"].includes(t)) return "worship";
+        return "other";
+      };
+      
+      // Helper: score item for sorting (higher = better)
+      const scoreItem = (item: any): number => {
+        let score = 0;
+        // Distance: closer is better (invert distance, cap at 3km)
+        const dist = item.distance || 3000;
+        score += Math.max(0, (3000 - dist) / 100); // 0-30 points based on distance
+        
+        // Source priority: local > OSM > Google
+        if (item.source === "goa_local") score += 15;
+        else if (item.source === "overpass") score += 10;
+        else if (item.source === "google") score += 5;
+        
+        // Has useful info
+        if (item.description && item.description.length > 10) score += 3;
+        if (item.details?.openTime || item.details?.phone) score += 2;
+        if (item.imageUrl) score += 5; // Photos are nice
+        if (item.isVerified) score += 3;
+        
+        return score;
+      };
+      
+      // Group by category
+      const byCategory: Record<string, any[]> = {};
+      deduped.forEach((item) => {
+        const cat = getCategory(item);
+        if (!byCategory[cat]) byCategory[cat] = [];
+        byCategory[cat].push(item);
       });
+      
+      // Sort each category by score (best first)
+      Object.keys(byCategory).forEach((cat) => {
+        byCategory[cat].sort((a, b) => scoreItem(b) - scoreItem(a));
+      });
+      
+      // Category quotas - essentials get more, prioritize local life
+      const quotas: Record<string, number> = {
+        toilet: 50,      // Show all toilets (usually not many)
+        water: 30,       // Show all water points
+        rest: 20,        // Benches, shelters
+        park: 20,        // Parks, gardens
+        beach: 15,       // Beach access
+        shop: 25,        // Kirana shops, convenience stores (local life!)
+        quickfood: 30,   // Fast food, bakeries (quick pit stops)
+        icecream: 10,    // Ice cream spots
+        restaurant: 40,  // Restaurants (plenty of options)
+        cafe: 25,        // Cafes
+        bar: 10,         // Bars
+        services: 15,    // Fuel, ATM, pharmacy
+        lodging: 15,     // Hotels/guesthouses
+        attraction: 15,  // Tourist spots
+        worship: 10,     // Temples, churches
+        other: 15,       // Everything else
+      };
+      
+      // Build final list with quotas, maintaining category order
+      const categoryOrder = [
+        "toilet", "water",           // Essentials first
+        "rest", "park", "beach",     // Rest & relax
+        "shop", "quickfood", "icecream", // Quick local stops
+        "cafe", "restaurant", "bar", // Dining
+        "services",                  // Services
+        "attraction", "worship",     // Sightseeing
+        "lodging", "other"           // Other
+      ];
+      
+      const curated: any[] = [];
+      const categoryStats: Record<string, { available: number; selected: number }> = {};
+      
+      categoryOrder.forEach((cat) => {
+        const items = byCategory[cat] || [];
+        const quota = quotas[cat] || 10;
+        const selected = items.slice(0, quota);
+        curated.push(...selected);
+        categoryStats[cat] = { available: items.length, selected: selected.length };
+      });
+      
+      // Add any remaining categories not in our list
+      Object.keys(byCategory).forEach((cat) => {
+        if (!categoryOrder.includes(cat)) {
+          const items = byCategory[cat] || [];
+          const selected = items.slice(0, 10);
+          curated.push(...selected);
+          categoryStats[cat] = { available: items.length, selected: selected.length };
+        }
+      });
+      
+      // Final sort by distance within the curated list (closest first overall)
+      curated.sort((a, b) => (a.distance || 0) - (b.distance || 0));
       
       // Build note showing which stops we searched
       const stopNames = searchPoints.map(p => p.label).join(", ");
-      // Show more results (25) to ensure restaurants aren't cut off after toilets
-      const finalItems = prioritized.slice(0, 25);
+      
+      // Log detailed breakdown
+      const finalTypeBreakdown: Record<string, number> = {};
+      const finalSourceBreakdown: Record<string, number> = {};
+      curated.forEach((item: any) => {
+        const cat = getCategory(item);
+        finalTypeBreakdown[cat] = (finalTypeBreakdown[cat] || 0) + 1;
+        finalSourceBreakdown[item.source || "unknown"] = (finalSourceBreakdown[item.source || "unknown"] || 0) + 1;
+      });
+      
+      console.log('[forceShowAmenities] Category quotas applied:');
+      Object.entries(categoryStats).forEach(([cat, stats]) => {
+        if (stats.available > 0) {
+          console.log(`  ${cat}: ${stats.selected}/${stats.available} (quota: ${quotas[cat] || 10})`);
+        }
+      });
+      console.log('[forceShowAmenities] Final curated count:', curated.length);
+      console.log('[forceShowAmenities] By category:', finalTypeBreakdown);
+      console.log('[forceShowAmenities] By source:', finalSourceBreakdown);
+      
+      const finalItems = curated;
       console.log('[forceShowAmenities] Setting refreshmentItems:', finalItems.length);
-      console.log('[forceShowAmenities] Categories:', [...new Set(finalItems.map((p: any) => p.category || p.type))]);
-      console.log('[forceShowAmenities] Sources:', [...new Set(finalItems.map((p: any) => p.source))]);
-      console.log('[forceShowAmenities] Sample item details:', finalItems[0]?.details);
+      console.log('[forceShowAmenities] First 5 items:', finalItems.slice(0, 5).map((i: any) => ({ 
+        name: i.name, cat: getCategory(i), dist: Math.round(i.distance || 0), source: i.source 
+      })));
       setRefreshmentItems(finalItems);
-      setRefreshmentNote(`Pit stops within 2km of: ${stopNames}`);
+      const essentials = (finalTypeBreakdown.toilet || 0) + (finalTypeBreakdown.water || 0);
+      const foodSpots = (finalTypeBreakdown.restaurant || 0) + (finalTypeBreakdown.cafe || 0) + (finalTypeBreakdown.quickfood || 0) + (finalTypeBreakdown.shop || 0);
+      setRefreshmentNote(`${finalItems.length} pit stops near ${stopNames} • ${essentials} restrooms/water • ${foodSpots} food spots`);
       setIsLoadingAmenities(false);
     } catch (e) {
       console.error("[forceShowAmenities] Error:", e);

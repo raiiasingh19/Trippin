@@ -55,6 +55,36 @@ export default function RefreshmentModal() {
   // Track which items have expanded details
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   
+  // Category filter
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  
+  // Helper: get normalized category for filtering
+  const getItemCategory = (item: any): string => {
+    const t = (item.type || item.category || "").toLowerCase();
+    if (["toilets", "toilet", "restroom"].includes(t)) return "toilet";
+    if (["drinking_water", "water_point"].includes(t)) return "water";
+    if (["bench", "shelter", "picnic_site", "park", "garden", "beach"].includes(t)) return "rest";
+    if (["kiosk", "convenience", "general", "supermarket", "fast_food", "bakery"].includes(t)) return "quickfood";
+    if (["restaurant", "food", "cafe", "bar", "pub", "ice_cream"].includes(t)) return "dining";
+    return "other";
+  };
+  
+  // Filter items based on selected category
+  const filteredItems = useMemo(() => {
+    if (categoryFilter === "all") return refreshmentItems;
+    return refreshmentItems.filter(item => getItemCategory(item) === categoryFilter);
+  }, [refreshmentItems, categoryFilter]);
+  
+  // Category counts for filter buttons
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: refreshmentItems.length };
+    refreshmentItems.forEach(item => {
+      const cat = getItemCategory(item);
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [refreshmentItems]);
+  
   const toggleExpand = (index: number) => {
     setExpandedItems(prev => {
       const next = new Set(prev);
@@ -222,26 +252,108 @@ export default function RefreshmentModal() {
             )}
           </select>
         </div>
-        <div className="p-4 max-h-[60vh] overflow-y-auto">
+        {/* Category filter bar */}
+        {refreshmentItems.length > 0 && !isLoadingAmenities && (
+          <div className="px-4 py-2 border-b bg-gray-50 flex flex-wrap gap-2">
+            <button
+              onClick={() => setCategoryFilter("all")}
+              className={`px-3 py-1 text-xs rounded-full transition ${
+                categoryFilter === "all" 
+                  ? "bg-gray-800 text-white" 
+                  : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              All ({categoryCounts.all || 0})
+            </button>
+            {(categoryCounts.toilet || 0) > 0 && (
+              <button
+                onClick={() => setCategoryFilter("toilet")}
+                className={`px-3 py-1 text-xs rounded-full transition ${
+                  categoryFilter === "toilet" 
+                    ? "bg-purple-600 text-white" 
+                    : "bg-white border border-purple-300 text-purple-700 hover:bg-purple-50"
+                }`}
+              >
+                🚻 Toilets ({categoryCounts.toilet})
+              </button>
+            )}
+            {(categoryCounts.water || 0) > 0 && (
+              <button
+                onClick={() => setCategoryFilter("water")}
+                className={`px-3 py-1 text-xs rounded-full transition ${
+                  categoryFilter === "water" 
+                    ? "bg-blue-600 text-white" 
+                    : "bg-white border border-blue-300 text-blue-700 hover:bg-blue-50"
+                }`}
+              >
+                💧 Water ({categoryCounts.water})
+              </button>
+            )}
+            {(categoryCounts.rest || 0) > 0 && (
+              <button
+                onClick={() => setCategoryFilter("rest")}
+                className={`px-3 py-1 text-xs rounded-full transition ${
+                  categoryFilter === "rest" 
+                    ? "bg-green-600 text-white" 
+                    : "bg-white border border-green-300 text-green-700 hover:bg-green-50"
+                }`}
+              >
+                🌳 Rest & Parks ({categoryCounts.rest})
+              </button>
+            )}
+            {(categoryCounts.quickfood || 0) > 0 && (
+              <button
+                onClick={() => setCategoryFilter("quickfood")}
+                className={`px-3 py-1 text-xs rounded-full transition ${
+                  categoryFilter === "quickfood" 
+                    ? "bg-orange-600 text-white" 
+                    : "bg-white border border-orange-300 text-orange-700 hover:bg-orange-50"
+                }`}
+              >
+                🥪 Quick Bites ({categoryCounts.quickfood})
+              </button>
+            )}
+            {(categoryCounts.dining || 0) > 0 && (
+              <button
+                onClick={() => setCategoryFilter("dining")}
+                className={`px-3 py-1 text-xs rounded-full transition ${
+                  categoryFilter === "dining" 
+                    ? "bg-pink-600 text-white" 
+                    : "bg-white border border-pink-300 text-pink-700 hover:bg-pink-50"
+                }`}
+              >
+                🍽️ Dining ({categoryCounts.dining})
+              </button>
+            )}
+            {(categoryCounts.other || 0) > 0 && (
+              <button
+                onClick={() => setCategoryFilter("other")}
+                className={`px-3 py-1 text-xs rounded-full transition ${
+                  categoryFilter === "other" 
+                    ? "bg-gray-600 text-white" 
+                    : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-100"
+                }`}
+              >
+                📍 Other ({categoryCounts.other})
+              </button>
+            )}
+          </div>
+        )}
+        <div className="p-4 max-h-[55vh] overflow-y-auto">
           {isLoadingAmenities ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-6 w-6 text-blue-600 animate-spin mb-3" />
               <p className="text-sm text-gray-600">Finding nearby amenities...</p>
             </div>
-          ) : refreshmentItems && refreshmentItems.length ? (
+          ) : filteredItems && filteredItems.length ? (
             <ul className="space-y-3">
-              {/* Debug logging */}
+              {/* Debug logging - shows in browser console */}
               {(() => {
-                console.log('[RefreshmentModal] Total items:', refreshmentItems.length);
-                console.log('[RefreshmentModal] First 3 items:', refreshmentItems.slice(0, 3).map((p: any) => ({ 
-                  name: p.name, type: p.type, category: p.category, source: p.source, 
-                  hasDetails: !!(p.details && Object.keys(p.details).length),
-                  details: p.details
-                })));
-                console.log('[RefreshmentModal] Restaurants:', refreshmentItems.filter((p: any) => p.type === 'restaurant' || p.category === 'restaurant').length);
+                console.log('=== [RefreshmentModal RENDER] ===');
+                console.log('[RefreshmentModal] Total items:', refreshmentItems.length, 'Filtered:', filteredItems.length);
                 return null;
               })()}
-              {refreshmentItems.map((p: any, i: number) => {
+              {filteredItems.map((p: any, i: number) => {
                 const isLocal = p.source === "goa_local" || p.external_place_id?.startsWith("goa:");
                 const isExpanded = expandedItems.has(i);
                 // Show details for any amenity that has relevant info
@@ -326,8 +438,18 @@ export default function RefreshmentModal() {
                               {p.category.replace(/_/g, " ")}
                             </span>
                           )}
+                          {/* Source indicator - visible in list */}
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                            p.source === "goa_local" 
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                              : p.source === "overpass" 
+                                ? "bg-amber-50 text-amber-700 border border-amber-200" 
+                                : "bg-blue-50 text-blue-600 border border-blue-200"
+                          }`}>
+                            {p.source === "goa_local" ? "📍" : p.source === "overpass" ? "🗺️" : "🔵"}
+                          </span>
                           {p.isVerified && (
-                            <span className="text-xs text-green-600">✓ Verified</span>
+                            <span className="text-xs text-green-600">✓</span>
                           )}
                         </div>
                         <div className="text-xs text-gray-600 truncate">
@@ -366,20 +488,12 @@ export default function RefreshmentModal() {
                           </div>
                         )}
                         
-                        {/* Address (for non-local amenities) */}
-                        {p.location?.address && !p.location?.landmark && (
-                          <div className="flex items-start gap-2 mb-2">
-                            <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                            <span className="text-gray-700">{p.location.address}</span>
-                          </div>
-                        )}
-                        
-                        {/* Landmark (for local amenities) */}
-                        {p.location?.landmark && (
+                        {/* Location context */}
+                        {(p.locationContext || p.location?.landmark || p.location?.address) && (
                           <div className="flex items-start gap-2 mb-2">
                             <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
                             <span className="text-gray-700">
-                              <span className="font-medium">Landmark:</span> {p.location.landmark}
+                              {p.locationContext || (p.location?.landmark ? `Near ${p.location.landmark}${p.location?.area ? `, ${p.location.area}` : ""}` : p.location?.address)}
                             </span>
                           </div>
                         )}
@@ -467,10 +581,16 @@ export default function RefreshmentModal() {
                           </div>
                         )}
                         
-                        {/* Source indicator */}
+                        {/* Source indicator - more prominent */}
                         {p.source && (
-                          <span className="inline-block px-2 py-1 rounded bg-gray-100 text-gray-600 text-xs mb-2">
-                            Source: {p.source === "goa_local" ? "Local" : p.source === "overpass" ? "OpenStreetMap" : p.source === "google" ? "Google" : p.source}
+                          <span className={`inline-block px-2 py-1 rounded text-xs mb-2 font-medium ${
+                            p.source === "goa_local" 
+                              ? "bg-emerald-100 text-emerald-800" 
+                              : p.source === "overpass" 
+                                ? "bg-amber-100 text-amber-800" 
+                                : "bg-blue-100 text-blue-700"
+                          }`}>
+                            {p.source === "goa_local" ? "📍 Verified Local" : p.source === "overpass" ? "🗺️ OpenStreetMap" : "🔵 Google"}
                           </span>
                         )}
                         
@@ -504,9 +624,19 @@ export default function RefreshmentModal() {
                 );
               })}
             </ul>
+          ) : refreshmentItems.length > 0 ? (
+            <div className="text-sm text-gray-700 py-4 text-center">
+              No {categoryFilter} spots in this area. 
+              <button 
+                onClick={() => setCategoryFilter("all")} 
+                className="text-blue-600 hover:underline ml-1"
+              >
+                Show all
+              </button>
+            </div>
           ) : (
             <div className="text-sm text-gray-700">
-              No obvious places found. Also look out for fruit/meat cutlet sellers near Panjim Library!
+              No pit stops found nearby. Try a different location!
             </div>
           )}
         </div>
