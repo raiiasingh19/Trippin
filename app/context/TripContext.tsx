@@ -749,19 +749,31 @@ export function TripProvider({ children }: { children: ReactNode }) {
             : google.maps.TransitRoutePreference.LESS_WALKING;
 
         // Goa transit hubs with coordinates for smart selection
+        // Comprehensive list covering all regions for maximum bus coverage
         const ALL_HUBS = [
-          // South Goa hubs (prioritize for South Goa destinations)
+          // Far South Goa hubs (for Palolem, Agonda, Canacona, Cavelossim)
+          { name: "Canacona Bus Stand, Goa", lat: 15.0134, lng: 74.0512, region: "far_south" },
+          { name: "Chaudi Bus Stand, Goa", lat: 15.0134, lng: 74.0512, region: "far_south" },
+          { name: "Betul Junction, Goa", lat: 15.1350, lng: 73.9610, region: "far_south" },
+          // South Goa hubs
           { name: "Margao Kadamba Bus Stand, Goa", lat: 15.2832, lng: 73.9610, region: "south" },
           { name: "Vasco da Gama Bus Stand, Goa", lat: 15.3954, lng: 73.8145, region: "south" },
           { name: "Colva Circle, Goa", lat: 15.2789, lng: 73.9200, region: "south" },
+          { name: "Benaulim Church Junction, Goa", lat: 15.2642, lng: 73.9312, region: "south" },
+          { name: "Cavelossim Junction, Goa", lat: 15.1750, lng: 73.9450, region: "south" },
+          { name: "Mobor Junction, Goa", lat: 15.1550, lng: 73.9350, region: "south" },
           { name: "Majorda Bus Stop, Goa", lat: 15.3010, lng: 73.9068, region: "south" },
           { name: "Cortalim Bus Stand, Goa", lat: 15.4050, lng: 73.9050, region: "south" },
+          { name: "Curchorem Bus Stand, Goa", lat: 15.2633, lng: 74.1083, region: "south" },
           // Central Goa hubs
           { name: "Panaji Kadamba Bus Stand, Goa", lat: 15.4963, lng: 73.8187, region: "central" },
           { name: "Ponda Bus Stand, Goa", lat: 15.4033, lng: 73.9667, region: "central" },
           { name: "Old Goa Bus Stop, Goa", lat: 15.5008, lng: 73.9116, region: "central" },
           // North Goa hubs
           { name: "Mapusa Bus Stand, Goa", lat: 15.5937, lng: 73.8102, region: "north" },
+          { name: "Calangute Bus Stop, Goa", lat: 15.5438, lng: 73.7553, region: "north" },
+          { name: "Candolim Junction, Goa", lat: 15.5180, lng: 73.7620, region: "north" },
+          { name: "Pernem Bus Stand, Goa", lat: 15.7230, lng: 73.7950, region: "north" },
         ];
         
         // Helper: Haversine distance in km
@@ -780,16 +792,39 @@ export function TripProvider({ children }: { children: ReactNode }) {
           const lower = placeName.toLowerCase();
           // Known Goa locations - comprehensive list for accurate detour detection
           const knownPlaces: Record<string, { lat: number, lng: number }> = {
-            // South Goa
-            "colva": { lat: 15.2789, lng: 73.9221 },
-            "benaulim": { lat: 15.2642, lng: 73.9312 },
-            "margao": { lat: 15.2832, lng: 73.9862 },
-            "vasco": { lat: 15.3980, lng: 73.8113 },
+            // Far South Goa (Canacona taluka)
             "palolem": { lat: 15.0100, lng: 74.0231 },
             "agonda": { lat: 15.0447, lng: 74.0072 },
+            "canacona": { lat: 15.0134, lng: 74.0512 },
+            "chaudi": { lat: 15.0134, lng: 74.0512 },
+            "patnem": { lat: 15.0050, lng: 74.0300 },
+            "cola": { lat: 15.0320, lng: 74.0050 },
+            
+            // South Goa (Salcete/Quepem)
+            "cavelossim": { lat: 15.1750, lng: 73.9450 },
+            "mobor": { lat: 15.1550, lng: 73.9350 },
+            "betul": { lat: 15.1350, lng: 73.9610 },
+            "varca": { lat: 15.2150, lng: 73.9360 },
+            "fatrade": { lat: 15.2400, lng: 73.9300 },
+            "carmona": { lat: 15.2500, lng: 73.9250 },
+            "colva": { lat: 15.2789, lng: 73.9221 },
+            "benaulim": { lat: 15.2642, lng: 73.9312 },
+            "sernabatim": { lat: 15.2580, lng: 73.9280 },
+            "margao": { lat: 15.2832, lng: 73.9862 },
+            "madgaon": { lat: 15.2832, lng: 73.9862 },
+            "curchorem": { lat: 15.2633, lng: 74.1083 },
+            "quepem": { lat: 15.2133, lng: 74.0767 },
+            "cuncolim": { lat: 15.1767, lng: 73.9933 },
+            "assolna": { lat: 15.1950, lng: 73.9600 },
+            
+            // South Goa (Mormugao)
+            "vasco": { lat: 15.3980, lng: 73.8113 },
             "majorda": { lat: 15.3010, lng: 73.9068 },
+            "utorda": { lat: 15.2900, lng: 73.9100 },
             "dabolim": { lat: 15.3808, lng: 73.8314 },
             "airport": { lat: 15.3808, lng: 73.8314 },
+            "bogmalo": { lat: 15.3750, lng: 73.8150 },
+            "chicalim": { lat: 15.3878, lng: 73.8340 },
             "chikalim": { lat: 15.3878, lng: 73.8340 },
             
             // Central - BITS/Zuarinagar area
@@ -1330,9 +1365,86 @@ export function TripProvider({ children }: { children: ReactNode }) {
             return best;
           }
 
+          // FINAL FALLBACK: Bus to closest reachable hub + Cab for the rest
+          // This handles cases like BITS to Cavelossim where no direct transit exists
+          console.log(`[findSegmentRoute] No full transit route found. Trying bus + cab fallback...`);
+          
+          // Find the hub closest to destination that we can reach by bus from origin
+          const destCoordsFallback = getApproxCoords(segDest);
+          let bestBusPlusCab: {
+            transitRoute: google.maps.DirectionsResult;
+            hubName: string;
+            hubToDestDistance: number;
+            busDuration: number;
+          } | null = null;
+          
+          // Try all hubs to find reachable ones
+          for (const hub of ALL_HUBS) {
+            try {
+              const transitToHub = await routeRequest({
+                origin: segOrigin,
+                destination: hub.name,
+                travelMode: google.maps.TravelMode.TRANSIT,
+                transitOptions: {
+                  routingPreference: transitPreference,
+                  departureTime: segDeparture,
+                },
+              });
+              
+              if (transitToHub && hasTransitLeg(transitToHub)) {
+                // Calculate distance from this hub to destination
+                let hubToDestDist = Infinity;
+                if (destCoordsFallback) {
+                  hubToDestDist = haversineDistance(hub.lat, hub.lng, destCoordsFallback.lat, destCoordsFallback.lng);
+                }
+                
+                // Pick the hub closest to destination (covers most of the journey by bus)
+                if (!bestBusPlusCab || hubToDestDist < bestBusPlusCab.hubToDestDistance) {
+                  bestBusPlusCab = {
+                    transitRoute: transitToHub,
+                    hubName: hub.name,
+                    hubToDestDistance: hubToDestDist,
+                    busDuration: getDuration(transitToHub),
+                  };
+                  console.log(`[findSegmentRoute] Found reachable hub: ${hub.name}, ${hubToDestDist.toFixed(1)}km to destination`);
+                }
+              }
+            } catch (e) {
+              // Skip this hub on error
+            }
+          }
+          
+          if (bestBusPlusCab) {
+            const cabDistKm = bestBusPlusCab.hubToDestDistance;
+            const cabTimeMin = Math.round(cabDistKm * 3); // ~3 min per km for cab estimate
+            console.log(`[findSegmentRoute] Using bus + cab fallback: Bus to ${bestBusPlusCab.hubName}, then cab ~${cabDistKm.toFixed(1)}km (~${cabTimeMin}min) to ${segDest}`);
+            
+            return {
+              segments: [bestBusPlusCab.transitRoute],
+              itineraryItems: [
+                { title: bestBusPlusCab.hubName.replace(", Goa", ""), description: "Bus drop-off" },
+                { title: "", description: `Cab recommended • ${cabDistKm.toFixed(1)} km • ~${cabTimeMin} mins by car` }
+              ],
+              totalDuration: bestBusPlusCab.busDuration + cabTimeMin * 60,
+              totalWalking: getTotalWalkingDistance(bestBusPlusCab.transitRoute),
+            };
+          }
+
           // Fallback to walking (for longer distances, suggest cab)
           if (walkRoute) {
             const walkDistFallback = getWalkDistance(walkRoute);
+            // If walking distance is too long, suggest cab instead
+            if (walkDistFallback > MAX_WALK_DISTANCE_M) {
+              const cabDistKm = walkDistFallback / 1000;
+              const cabTimeMin = Math.round(cabDistKm * 3);
+              console.log(`[findSegmentRoute] Distance too far for walking (${cabDistKm.toFixed(1)}km). Suggesting cab.`);
+              return {
+                segments: [], // No directions to render - it's a cab segment
+                itineraryItems: [{ title: "", description: `Cab recommended • ${cabDistKm.toFixed(1)} km • ~${cabTimeMin} mins by car` }],
+                totalDuration: cabTimeMin * 60,
+                totalWalking: 0,
+              };
+            }
             return {
               segments: [walkRoute],
               itineraryItems: [{ title: "", description: `Walk ${Math.round(walkDistFallback)}m (no transit available)` }],
@@ -1366,15 +1478,20 @@ export function TripProvider({ children }: { children: ReactNode }) {
           
           if (result.segments.length > 0) {
             allSegments.push(...result.segments);
-            // Add intermediate itinerary items (like hub stops)
-            result.itineraryItems.forEach(item => {
-              if (item.title) {
-                allItineraryItems.push(item);
-              }
-            });
-            // Update departure time for next segment
-            currentDeparture = new Date(currentDeparture.getTime() + result.totalDuration * 1000);
           }
+          
+          // Add intermediate itinerary items (like hub stops and cab recommendations)
+          // Note: Walk items are NOT added here because ItineraryView extracts them from directionsSegments
+          result.itineraryItems.forEach(item => {
+            // Include items with a title (hub stops) OR cab recommendations (for bus+cab fallback)
+            // Skip walk items - they are already extracted from directionsSegments in ItineraryView
+            if (item.title || (item.description.includes("Cab recommended") && !item.description.includes("Walk"))) {
+              allItineraryItems.push(item);
+            }
+          });
+          
+          // Update departure time for next segment
+          currentDeparture = new Date(currentDeparture.getTime() + result.totalDuration * 1000);
           
           // Add the destination of this segment to itinerary
           if (i < allPoints.length - 2) {

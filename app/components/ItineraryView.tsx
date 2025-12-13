@@ -273,10 +273,39 @@ export default function ItineraryView({
 
   // Detailed transit steps per leg (Board/Walk/Ride details)
   // Groups segments by leg using segmentsByLeg tracking from context
+  // Extract hub drop-offs and cab recommendations from itinerary (for bus+cab fallback display)
+  const hubAndCabItems = useMemo(() => {
+    const hubs: { title: string; description: string }[] = [];
+    const cabs: { title: string; description: string }[] = [];
+    
+    itinerary.forEach(item => {
+      if (item.description === "Bus drop-off" && item.title) {
+        hubs.push(item);
+      } else if (item.description.includes("Cab recommended")) {
+        cabs.push(item);
+      }
+    });
+    
+    return { hubs, cabs };
+  }, [itinerary]);
+
   const transitStepsByLeg = useMemo(() => {
     if (travelMode !== "TRANSIT") return [];
     
     const numLegs = nodes.length - 1; // number of node-pairs
+    
+    // Helper to deduplicate consecutive walk/cab steps (prevents duplicate walks showing)
+    const dedupeSteps = (steps: ReturnType<typeof extractStepsFromSegment>) => {
+      const deduped: ReturnType<typeof extractStepsFromSegment> = [];
+      for (const step of steps) {
+        const prev = deduped[deduped.length - 1];
+        if (prev && step.mode === prev.mode && (step.mode === "WALK" || step.mode === "CAB")) {
+          continue; // Skip duplicate consecutive walk/cab
+        }
+        deduped.push(step);
+      }
+      return deduped;
+    };
     
     // If we have segmentsByLeg tracking, use it for accurate grouping
     if (segmentsByLeg && segmentsByLeg.length === numLegs) {
@@ -293,7 +322,7 @@ export default function ItineraryView({
           segmentIndex++;
         }
         
-        result.push(legSteps);
+        result.push(dedupeSteps(legSteps));
       }
       
       return result;
@@ -311,7 +340,7 @@ export default function ItineraryView({
         directionsSegments.forEach((seg) => {
           allSteps.push(...extractStepsFromSegment(seg));
         });
-        return [allSteps];
+        return [dedupeSteps(allSteps)];
       }
       
       // Multiple legs with more segments - try to distribute
@@ -330,14 +359,14 @@ export default function ItineraryView({
           }
         }
         
-        result.push(legSteps);
+        result.push(dedupeSteps(legSteps));
       }
       
       return result;
     }
     
     // Standard case: one segment per leg
-    return directionsSegments.map((seg) => extractStepsFromSegment(seg));
+    return directionsSegments.map((seg) => dedupeSteps(extractStepsFromSegment(seg)));
   }, [travelMode, directionsSegments, nodes.length, segmentsByLeg]);
 
   if (!showItinerary) return null;
@@ -445,6 +474,7 @@ export default function ItineraryView({
         </div>
       ))}
 
+
       {travelMode === "TRANSIT" && noTransitFound ? (
         <div className="mb-4">
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-3 py-2 rounded">
@@ -504,6 +534,34 @@ export default function ItineraryView({
               </div>
             ) : null}
             
+            {/* Bus+Cab fallback: Show hub drop-off and cab recommendation */}
+            {travelMode === "TRANSIT" && idx === nodes.length - 2 && hubAndCabItems.hubs.length > 0 && (
+              <>
+                {/* Hub drop-off point */}
+                {hubAndCabItems.hubs.map((hub, hi) => (
+                  <div key={`hub-${hi}`} className="mb-2">
+                    <div className="bg-blue-50 border border-blue-100 p-3 rounded">
+                      <div className="text-sm text-blue-600">Bus drop-off point</div>
+                      <div className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                        <MapPin className="h-4 w-4 text-blue-600" />
+                        <span>{hub.title}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {/* Cab recommendation */}
+                {hubAndCabItems.cabs.map((cab, ci) => (
+                  <div key={`cab-${ci}`} className="mb-2">
+                    <div className="bg-amber-50 border border-amber-200 px-3 py-2 rounded">
+                      <div className="flex items-center space-x-2 text-sm text-amber-800">
+                        <Car className="h-4 w-4" />
+                        <span>{cab.description}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
 
             {/* Next stop/destination */}
             <div className="relative">
