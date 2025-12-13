@@ -85,16 +85,37 @@ export default function ExplorePage() {
   const confirmAddToTrip = async (tripId: string) => {
     if (!showAddToTripFor) return;
     try {
+      // Build the place object with displayName for the waypoint name
+      const placeWithName = {
+        ...showAddToTripFor,
+        displayName: showAddToTripFor.name,
+        // Build locationStr for routing (prefer coords, then address)
+        locationStr: showAddToTripFor.location?.lat && showAddToTripFor.location?.lng
+          ? `${showAddToTripFor.location.lat},${showAddToTripFor.location.lng}`
+          : showAddToTripFor.location?.address || showAddToTripFor.name,
+      };
+      
       const res = await fetch(`/api/journeys/${tripId}/addPlace`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ place: showAddToTripFor }),
+        body: JSON.stringify({ place: placeWithName }),
       });
       if (!res.ok) throw new Error("Failed to add");
       const data = await res.json();
-      // refetch journeys in context (simple)
+      // refetch journeys in context
       const r = await fetch("/api/journeys");
-      if (r.ok) ctx.setSavedJourneys(await r.json());
+      if (r.ok) {
+        const journeys = await r.json();
+        ctx.setSavedJourneys(journeys);
+        // Update waypointNames in context for the updated journey
+        const updated = journeys.find((j: any) => j._id === tripId);
+        if (updated) {
+          const wpNames = updated.waypointNames || 
+            (updated.waypointNamesJson ? JSON.parse(updated.waypointNamesJson) : {});
+          ctx.setWaypointNames(wpNames);
+          if (updated.destinationName) ctx.setDestinationName(updated.destinationName);
+        }
+      }
       alert("Added to trip");
     } catch (e) {
       console.error(e);

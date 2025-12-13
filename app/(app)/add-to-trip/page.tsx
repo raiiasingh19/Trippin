@@ -15,11 +15,14 @@ export default function AddToTripPage() {
     setPendingRecalc,
     setOrigin,
     setDestination,
+    setDestinationName,
     setTravelMode,
     setFilterOption,
     setWaypoints,
+    setWaypointNames,
     setStopTimes,
     setSavedJourneys,
+    setEditingJourneyId,
   } = useTripContext();
 
   const [selectedTripId, setSelectedTripId] = useState<string | null>(tripIdParam);
@@ -81,10 +84,17 @@ export default function AddToTripPage() {
       if (journey) {
         setOrigin(journey.start);
         setDestination(journey.destination);
+        setDestinationName(journey.destinationName || "");
         setTravelMode(journey.travelMode);
         setFilterOption(journey.filterOption);
-      setWaypoints(journey.waypoints || []);
-      setStopTimes(journey.stopTimes || []);
+        setWaypoints(journey.waypoints || []);
+        // Parse waypointNames - it might come as object or need parsing from JSON
+        const wpNames = journey.waypointNames || 
+          (journey.waypointNamesJson ? JSON.parse(journey.waypointNamesJson) : {});
+        setWaypointNames(wpNames);
+        setStopTimes(journey.stopTimes || []);
+        // Set editing journey ID so subsequent saves update this journey
+        setEditingJourneyId(journey._id);
       }
       // set a flag so the Home page will recalc directions when maps are ready
       setPendingRecalc(true);

@@ -249,7 +249,10 @@ export default function RefreshmentModal() {
               setDestination(j.destination);
               setDestinationName(j.destinationName || "");
               setWaypoints(j.waypoints || []);
-              setWaypointNames(j.waypointNames || {});
+              // Parse waypointNames - might come as object or need parsing from JSON
+              const wpNames = j.waypointNames || 
+                (j.waypointNamesJson ? JSON.parse(j.waypointNamesJson) : {});
+              setWaypointNames(wpNames);
               setStopTimes(j.stopTimes || []);
               setTravelMode(j.travelMode);
               setFilterOption(j.filterOption);
