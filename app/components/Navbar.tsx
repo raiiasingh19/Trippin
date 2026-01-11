@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { UserCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -9,6 +9,7 @@ import { useTripContext } from "../context/TripContext";
 export default function Navbar() {
   const { data: session, status } = useSession();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const {
     setShowModal,
@@ -21,6 +22,23 @@ export default function Navbar() {
     setWaypointNames,
     clearTripState,
   } = useTripContext();
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+
+    if (dropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [dropdownOpen]);
 
   return (
     <nav className="bg-black text-white flex items-center justify-between px-4 py-2">
@@ -60,7 +78,7 @@ export default function Navbar() {
           </button>
         ) : (
           // Signed-in: Show User Icon + Dropdown
-          <div className="relative">
+          <div className="relative" ref={dropdownRef}>
             <button onClick={() => setDropdownOpen((p) => !p)}>
               <UserCircle className="h-8 w-8 text-white" />
             </button>
