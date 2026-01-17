@@ -36,6 +36,9 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
+  // Extra logs to help diagnose OAuth issues like invalid_client
+  // debug: true,
+
   callbacks: {
     // On first Google sign-in, ensure a User document exists in Mongo
     async signIn({ user, account }) {

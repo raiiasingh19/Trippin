@@ -1,7 +1,34 @@
 // next.config.ts
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+const nextConfig = {
+  // Force correct workspace root for Turbopack (fixes multi-lockfile mis-detection)
+  // See: https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory
+  turbopack: {
+    root: "/Users/rsi114/Downloads/IdeaProjects/Trippin",
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.tripadvisor.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.holidify.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '**.goatourism.gov.in',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+    ],
+  },
   async headers() {
     return [
       {

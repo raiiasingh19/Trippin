@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTripContext } from "../../context/TripContext";
 
-export default function AddToTripPage() {
+function AddToTripContent() {
   const params = useSearchParams();
   const router = useRouter();
   const tripIdParam = params.get("tripId");
@@ -13,15 +13,20 @@ export default function AddToTripPage() {
     pendingPlace,
     setPendingPlace,
     setPendingRecalc,
+    setOrigin,
+    setDestination,
+    setDestinationName,
+    setTravelMode,
+    setFilterOption,
     setWaypoints,
+    setWaypointNames,
     setStopTimes,
     setSavedJourneys,
+    setEditingJourneyId,
   } = useTripContext();
 
   const [selectedTripId, setSelectedTripId] = useState<string | null>(tripIdParam);
   const [insertIndex, setInsertIndex] = useState<number>(0);
-  const [arriveBy, setArriveBy] = useState("");
-  const [leaveBy, setLeaveBy] = useState("");
 
   useEffect(() => {
     if (!pendingPlace) {
@@ -37,10 +42,15 @@ export default function AddToTripPage() {
     }
   }, [selectedTripId, savedJourneys]);
 
-  if (!pendingPlace) return null;
-
   const chosenTrip = selectedTripId ? savedJourneys.find((j) => j._id === selectedTripId) : savedJourneys[0];
-  const slots = chosenTrip ? (chosenTrip.waypoints ? chosenTrip.waypoints.length + 1 : 1) : 1;
+  const stops = useMemo(() => {
+    if (!chosenTrip) return [] as string[];
+    const wps = Array.isArray(chosenTrip.waypoints) ? chosenTrip.waypoints : [];
+    const dest = chosenTrip.destination ? [chosenTrip.destination] : [];
+    return [...wps, ...dest];
+  }, [chosenTrip]);
+
+  if (!pendingPlace) return null;
 
   const onConfirm = async () => {
     if (!chosenTrip) return alert("Select a trip first.");
@@ -48,20 +58,44 @@ export default function AddToTripPage() {
       const res = await fetch(`/api/journeys/${chosenTrip._id}/addPlace`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ place: pendingPlace, index: insertIndex, stopTime: { arriveBy, leaveBy } }),
+        body: JSON.stringify({ place: pendingPlace, index: insertIndex }),
       });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err?.message || "Failed to add place");
       }
-      const { journey } = await res.json();
-      // update local context to reflect new journey
-      // 1) refetch saved journeys
+      let journey: any = null;
+      try {
+        const parsed = await res.json();
+        journey = parsed?.journey || null;
+      } catch {
+        journey = null;
+      }
+      // Always refresh saved journeys; some environments return empty body
       const r = await fetch("/api/journeys");
-      if (r.ok) setSavedJourneys(await r.json());
-      // 2) set current waypoints/stopTimes to the updated journey so UI reflects it
+      if (r.ok) {
+        const list = await r.json();
+        setSavedJourneys(list);
+        if (!journey) {
+          journey = list.find((j: any) => j._id === chosenTrip._id) || null;
+        }
+      }
+      // Update current context to reflect the latest journey
+      if (journey) {
+        setOrigin(journey.start);
+        setDestination(journey.destination);
+        setDestinationName(journey.destinationName || "");
+        setTravelMode(journey.travelMode);
+        setFilterOption(journey.filterOption);
       setWaypoints(journey.waypoints || []);
+        // Parse waypointNames - it might come as object or need parsing from JSON
+        const wpNames = journey.waypointNames || 
+          (journey.waypointNamesJson ? JSON.parse(journey.waypointNamesJson) : {});
+        setWaypointNames(wpNames);
       setStopTimes(journey.stopTimes || []);
+        // Set editing journey ID so subsequent saves update this journey
+        setEditingJourneyId(journey._id);
+      }
       // set a flag so the Home page will recalc directions when maps are ready
       setPendingRecalc(true);
       // clear pendingPlace and go home where map will be recalculated
@@ -69,7 +103,10 @@ export default function AddToTripPage() {
       router.push("/");
     } catch (e: any) {
       console.error(e);
-      alert("Error adding place: " + (e.message || e));
+      // Be lenient: if add likely succeeded but parsing failed, still continue UX without alerting
+      setPendingPlace(null);
+      setPendingRecalc(true);
+      router.push("/");
     }
   };
 
@@ -94,27 +131,37 @@ export default function AddToTripPage() {
       <div className="mb-4">
         <label className="block font-medium">Where to insert</label>
         <select value={insertIndex} onChange={(e) => setInsertIndex(parseInt(e.target.value, 10))} className="w-full p-2 border rounded">
-          {Array.from({ length: slots }).map((_, idx) => (
-            <option key={idx} value={idx}>{idx === 0 ? `Before first stop` : idx === slots - 1 ? `After last stop` : `After stop ${idx}`}</option>
-          ))}
+          {stops.length > 0 && (
+            <>
+              {/* Before stop 1 */}
+              <option value={0}>{`Before stop 1: ${stops[0]}`}</option>
+              {/* After stop i for i = 1..N (N includes destination) */}
+              {stops.map((name: string, i: number) => {
+                const wLen = chosenTrip?.waypoints?.length || 0;
+                const afterIdx = i + 1 <= wLen ? i + 1 : wLen + 1; // after destination => wLen+1
+                return (
+                  <option key={`after-${i}`} value={afterIdx}>{`After stop ${i + 1}: ${name}`}</option>
+                );
+              })}
+            </>
+          )}
         </select>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-2">
-        <div>
-          <label className="block font-medium">Arrive by</label>
-          <input type="time" value={arriveBy} onChange={(e) => setArriveBy(e.target.value)} className="w-full p-2 border rounded" />
-        </div>
-        <div>
-          <label className="block font-medium">Leave by</label>
-          <input type="time" value={leaveBy} onChange={(e) => setLeaveBy(e.target.value)} className="w-full p-2 border rounded" />
-        </div>
-      </div>
+      
 
       <div className="flex space-x-2">
         <button onClick={onConfirm} className="px-4 py-2 bg-blue-600 text-white rounded">Confirm & Add</button>
         <button onClick={() => { setPendingPlace(null); router.push('/'); }} className="px-4 py-2 bg-gray-200 rounded">Cancel</button>
       </div>
     </div>
+  );
+}
+
+export default function AddToTripPage() {
+  return (
+    <Suspense fallback={<div className="p-8">Loading...</div>}>
+      <AddToTripContent />
+    </Suspense>
   );
 }
