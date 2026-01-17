@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npx @cloudflare/next-on-pages build",
+    "build": "next build",
+    "pages:build": "npx @cloudflare/next-on-pages",
+    "pages:deploy": "npm run pages:build && npx wrangler pages deploy .vercel/output/static --project-name=trippin",
     "start": "next start",
     "lint": "next lint",
     "seed:amenities": "npx ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/seed-amenities.ts",
