@@ -15,6 +15,8 @@ interface TripContextType {
   setPostSaveRedirectToTrips: (v: boolean) => void;
   showNoChangesPrompt: boolean;
   setShowNoChangesPrompt: (v: boolean) => void;
+  showSignInPrompt: boolean;
+  setShowSignInPrompt: (v: boolean) => void;
   showRefreshmentModal: boolean;
   setShowRefreshmentModal: (v: boolean) => void;
   refreshmentItems: any[];
@@ -123,6 +125,7 @@ export function TripProvider({ children }: { children: ReactNode }) {
   const [pendingNavigateHome, setPendingNavigateHome] = useState(false);
   const [postSaveRedirectToTrips, setPostSaveRedirectToTrips] = useState(false);
   const [showNoChangesPrompt, setShowNoChangesPrompt] = useState(false);
+  const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const [itinerary, setItinerary] = useState<{ title: string; description: string }[]>([]);
   const [segmentInfos, setSegmentInfos] = useState<any[]>([]);
   const [segmentsByLeg, setSegmentsByLeg] = useState<number[]>([]);
@@ -915,6 +918,10 @@ export function TripProvider({ children }: { children: ReactNode }) {
         }
         alert("Trip saved.");
         return saved;
+      } else if (res.status === 401) {
+        // User not authenticated
+        alert("Error saving trip.");
+        return null;
       } else {
         alert("Error saving trip.");
       }
@@ -2091,6 +2098,8 @@ export function TripProvider({ children }: { children: ReactNode }) {
         setPostSaveRedirectToTrips,
         showNoChangesPrompt,
         setShowNoChangesPrompt,
+        showSignInPrompt,
+        setShowSignInPrompt,
   pendingPlace,
   setPendingPlace,
   pendingRecalc,

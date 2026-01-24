@@ -347,16 +347,16 @@ export default function ExplorePage() {
                     </div>
                   )}
 
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex gap-2 flex-wrap">
                     <button 
                       onClick={() => handleBookmark(r)} 
-                      className="btn-glass text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium"
+                      className="btn-glass text-gray-700 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap"
                     >
                       {bookmarking === r.name ? "..." : "Bookmark"}
                     </button>
                     <button 
                       onClick={() => handleAddToTrip(r)} 
-                      className="btn-green text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+                      className="btn-green text-white px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap"
                     >
                       Add to trip
                     </button>
@@ -365,7 +365,7 @@ export default function ExplorePage() {
                         href={r.ticketLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-[#4A7C59] underline px-2 py-1.5"
+                        className="text-sm text-[#4A7C59] underline px-2 py-1.5 whitespace-nowrap"
                       >
                         Tickets
                       </a>
@@ -396,7 +396,7 @@ export default function ExplorePage() {
                         <div className="text-sm text-gray-600">{new Date(j.startTime).toLocaleString()}</div>
                       </div>
                       <div className="flex gap-2">
-                        <button onClick={() => confirmAddToTrip(j._id)} className="btn-green text-white px-4 py-1.5 rounded-lg text-sm font-medium">Add</button>
+                        <button onClick={() => confirmAddToTrip(j._id)} className="btn-green text-white px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap">Add</button>
                       </div>
                     </div>
                   ))}

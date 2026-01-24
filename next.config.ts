@@ -61,6 +61,24 @@ const nextConfig = {
             value: '1; mode=block'
           }
         ]
+      },
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' https://maps.googleapis.com https://maps.gstatic.com 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://maps.googleapis.com https://maps.gstatic.com",
+              "img-src 'self' data: https: blob:",
+              "font-src 'self' https://fonts.gstatic.com",
+              "connect-src 'self' https://maps.googleapis.com https://maps.gstatic.com https://accounts.google.com https://*.googleapis.com",
+              "frame-src 'self' https://maps.googleapis.com https://accounts.google.com",
+              "object-src 'none'",
+            ].join("; ")
+          }
+        ]
       }
     ];
   },

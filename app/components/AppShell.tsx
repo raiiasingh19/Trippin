@@ -6,6 +6,7 @@ import { useLoadScript } from "@react-google-maps/api";
 import Navbar from "./Navbar";
 import Footer from "./Footer";
 import TripPlannerModal from "./TripPlannerModal";
+import SignInPromptModal from "./SignInPromptModal";
 import RefreshmentModal from "./RefreshmentModal";
 import { useTripContext } from "../context/TripContext";
 import type { ReactNode, FormEvent } from "react";
@@ -56,6 +57,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     setDirections,
     setDirectionsSegments,
     setExtraMarkers,
+    showSignInPrompt,
+    setShowSignInPrompt,
   } = useTripContext();
 
   // Guard to prevent duplicate recalculation calls
@@ -155,6 +158,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
         onGetDirections={handleGetDirections}
       />
       <RefreshmentModal />
+      <SignInPromptModal 
+        showPrompt={showSignInPrompt}
+        onClose={() => setShowSignInPrompt(false)}
+      />
       {children}
       <Footer />
     </>

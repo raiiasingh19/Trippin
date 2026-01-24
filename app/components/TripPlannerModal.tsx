@@ -1,6 +1,7 @@
 "use client";
 
 import React, { FormEvent, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { useTripContext } from "../context/TripContext";
 import { Autocomplete } from "@react-google-maps/api";
 
@@ -72,7 +73,8 @@ export default function TripPlannerModal({
   isEditing = false,
 }: TripPlannerModalProps) {
   // All hooks must be at the top, before any return
-  const { editingJourneyId } = useTripContext();
+  const { status } = useSession();
+  const { editingJourneyId, setShowSignInPrompt } = useTripContext();
   const originRef = useRef<google.maps.places.Autocomplete | null>(null);
   const destinationRef = useRef<google.maps.places.Autocomplete | null>(null);
   const waypointRefs = useRef<(google.maps.places.Autocomplete | null)[]>([]);
@@ -81,6 +83,14 @@ export default function TripPlannerModal({
   
   // Determine if we're in editing mode (from prop or context)
   const inEditMode = isEditing || !!editingJourneyId;
+
+  // Show sign-in prompt if modal is opened and user is not authenticated (unless editing)
+  useEffect(() => {
+    if (showModal && status === "unauthenticated" && !inEditMode) {
+      setShowSignInPrompt(true);
+      onClose();
+    }
+  }, [showModal, status, inEditMode, setShowSignInPrompt, onClose]);
 
   useEffect(() => {
     if (destinationInputRef.current) {
@@ -106,7 +116,7 @@ export default function TripPlannerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-3xl max-h-[90vh] overflow-y-auto border-4 border-[#4A7C59]">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-8 w-full max-w-sm md:max-w-3xl mx-4 md:mx-0 max-h-[90vh] overflow-y-auto border-4 border-[#4A7C59]">
         <h2 className="text-2xl font-semibold mb-6 text-[#6B5539]">
           {inEditMode ? "Edit trip" : "Plan trip"}
         </h2>
@@ -154,7 +164,7 @@ export default function TripPlannerModal({
           <button
             type="button"
             onClick={onAddStop}
-            className="btn-green text-white px-5 py-2.5 rounded-xl font-medium"
+            className="btn-green text-white px-5 py-2.5 rounded-xl font-medium whitespace-nowrap"
           >
             + Add Stop
           </button>
@@ -291,13 +301,13 @@ export default function TripPlannerModal({
             <button
               type="button"
               onClick={onClose}
-              className="btn-glass text-gray-700 px-6 py-2.5 rounded-xl font-medium"
+              className="btn-glass text-gray-700 px-6 py-2.5 rounded-xl font-medium whitespace-nowrap"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="btn-green text-white px-6 py-2.5 rounded-xl font-medium"
+              className="btn-green text-white px-6 py-2.5 rounded-xl font-medium whitespace-nowrap"
             >
               {inEditMode ? "Save" : "Start Trippin"}
             </button>

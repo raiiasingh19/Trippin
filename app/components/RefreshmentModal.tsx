@@ -327,9 +327,9 @@ export default function RefreshmentModal() {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <style>{thinScrollbarStyles}</style>
-      <div className="bg-[#FAF3E0] rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] flex flex-col border-2 border-[#4A7C59]">
-        <div className="p-5 border-b border-[#E8D4A8]">
-          <div className="text-xl font-semibold text-[#6B5539]">
+      <div className="bg-[#FAF3E0] rounded-2xl shadow-2xl max-w-sm md:max-w-2xl w-full mx-4 max-h-[90vh] md:max-h-[85vh] flex flex-col border-2 border-[#4A7C59]">
+        <div className="p-4 md:p-5 border-b border-[#E8D4A8]">
+          <div className="text-lg md:text-xl font-semibold text-[#6B5539]">
             Quick pit stop suggestions
           </div>
           {refreshmentNote ? <div className="text-sm text-gray-700 mt-2">{refreshmentNote}</div> : null}
@@ -734,7 +734,7 @@ export default function RefreshmentModal() {
             </div>
           )}
         </div>
-        <div className="p-5 border-t border-[#E8D4A8] flex justify-end">
+        <div className="p-4 md:p-5 border-t border-[#E8D4A8] flex justify-end">
           <button
             onClick={() => {
               setShowRefreshmentModal(false);
@@ -743,7 +743,7 @@ export default function RefreshmentModal() {
                 router.push("/my-trips");
               }
             }}
-            className="btn-glass text-gray-700 px-6 py-2.5 rounded-xl font-medium"
+            className="btn-glass text-gray-700 px-6 py-2.5 rounded-xl font-medium whitespace-nowrap"
           >
             Close
           </button>
