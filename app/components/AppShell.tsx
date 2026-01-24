@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useLoadScript } from "@react-google-maps/api";
 import Navbar from "./Navbar";
+import Footer from "./Footer";
 import TripPlannerModal from "./TripPlannerModal";
 import RefreshmentModal from "./RefreshmentModal";
 import { useTripContext } from "../context/TripContext";
@@ -155,6 +156,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       />
       <RefreshmentModal />
       {children}
+      <Footer />
     </>
   );
 }
