@@ -2,13 +2,14 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
-import { UserCircle } from "lucide-react";
+import { UserCircle, Menu, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTripContext } from "../context/TripContext";
 
 export default function Navbar() {
   const { data: session, status } = useSession();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const {
@@ -41,19 +42,40 @@ export default function Navbar() {
     };
   }, [dropdownOpen]);
 
+  // Close mobile menu when navigating
+  const handleNavigation = (callback?: () => void) => {
+    callback?.();
+    setMobileMenuOpen(false);
+  };
+
+  const handlePlanTrip = () => {
+    setEditingJourneyId(null);
+    setWaypoints([]);
+    setStopTimes([]);
+    setDestination("");
+    setDestinationName("");
+    setWaypointNames({});
+    clearTripState();
+    setShowModal(true);
+    setMobileMenuOpen(false);
+  };
+
   return (
-    <nav className="bg-[#F4E4C1] border-b-4 border-[#C8B896] px-6 py-4 sticky top-0 z-50 shadow-lg">
+    <nav className="bg-[#F4E4C1] border-b-4 border-[#C8B896] px-4 md:px-6 py-4 sticky top-0 z-50 shadow-lg">
       <div className="flex items-center justify-between max-w-7xl mx-auto">
+        {/* Logo */}
         <div className="flex-shrink-0 cursor-pointer group" onClick={() => {
           setShowItinerary(false);
           router.push("/");
+          setMobileMenuOpen(false);
         }}> 
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-[#4A7C59] via-[#E07856] to-[#87CEEB] bg-clip-text text-transparent transition-all group-hover:scale-105">
+          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-[#4A7C59] via-[#E07856] to-[#87CEEB] bg-clip-text text-transparent transition-all group-hover:scale-105 whitespace-nowrap">
             🌴 TRIPPIN&apos;
           </h1>
         </div>
 
-        <div className="flex space-x-3 items-center relative">
+        {/* Desktop Navigation */}
+        <div className="hidden md:flex space-x-3 items-center relative">
           {/* Home Button */}
           <button 
             className="btn-glass text-gray-700 px-4 py-2 rounded-lg font-medium"
@@ -75,16 +97,7 @@ export default function Navbar() {
 
           {/* Plan Trip button */}
           <button
-            onClick={() => {
-              setEditingJourneyId(null);
-              setWaypoints([]);
-              setStopTimes([]);
-              setDestination("");
-              setDestinationName("");
-              setWaypointNames({});
-              clearTripState();
-              setShowModal(true);
-            }}
+            onClick={handlePlanTrip}
             className="btn-glass text-gray-700 px-4 py-2 rounded-lg font-medium"
           >
             Plan Trip
@@ -139,7 +152,89 @@ export default function Navbar() {
             </div>
           )}
         </div>
+
+        {/* Mobile Menu Button */}
+        <button 
+          className="md:hidden flex items-center justify-center p-2"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          {mobileMenuOpen ? (
+            <X className="h-6 w-6 text-gray-700" />
+          ) : (
+            <Menu className="h-6 w-6 text-gray-700" />
+          )}
+        </button>
       </div>
+
+      {/* Mobile Menu */}
+      {mobileMenuOpen && (
+        <div className="md:hidden mt-4 pb-4 space-y-2">
+          {/* Home Button */}
+          <button 
+            className="btn-glass text-gray-700 px-4 py-2.5 rounded-lg font-medium w-full text-left"
+            onClick={() => {
+              setShowItinerary(false);
+              handleNavigation(() => router.push("/"));
+            }}
+          >
+            Home
+          </button>
+
+          {/* Explore Button */}
+          <button 
+            className="btn-glass text-gray-700 px-4 py-2.5 rounded-lg font-medium w-full text-left"
+            onClick={() => handleNavigation(() => router.push("/explore"))}
+          >
+            Explore
+          </button>
+
+          {/* Plan Trip button */}
+          <button
+            onClick={handlePlanTrip}
+            className="btn-glass text-gray-700 px-4 py-2.5 rounded-lg font-medium w-full text-left"
+          >
+            Plan Trip
+          </button>
+
+          {/* Signed-out: Show Sign In */}
+          {status !== "authenticated" ? (
+            <button
+              onClick={() => {
+                signIn("google");
+                setMobileMenuOpen(false);
+              }}
+              className="btn-glass text-gray-700 px-4 py-2.5 rounded-lg font-medium w-full text-left"
+            >
+              Sign In
+            </button>
+          ) : (
+            <>
+              {/* My Trips */}
+              <button
+                onClick={() => {
+                  router.push("/my-trips");
+                  setMobileMenuOpen(false);
+                }}
+                className="btn-glass text-gray-700 px-4 py-2.5 rounded-lg font-medium w-full text-left"
+              >
+                My Trips
+              </button>
+
+              {/* Sign Out */}
+              <button
+                onClick={() => {
+                  signOut();
+                  setMobileMenuOpen(false);
+                }}
+                className="btn-glass text-gray-700 px-4 py-2.5 rounded-lg font-medium w-full text-left"
+              >
+                Sign Out
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </nav>
   );
 }
